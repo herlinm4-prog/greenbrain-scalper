@@ -137,3 +137,13 @@ Required GreenBrain to generate multiple methods and strategies through learning
 ### Assistant and decision
 
 Added a Strategy Research Library and anomaly-discovery reporting requirement. GreenBrain will convert qualified observations into versioned human-readable strategy documents containing hypothesis, market context, entry and exit logic, invalidation, risk assumptions, evidence, costs, applicable regimes, failure modes, validation status, and lineage. Unusual observations remain labeled as anomalies or hypotheses until reproducible. The system will generate periodic discovery reports and maintain a user-exportable strategy compilation without exposing unvalidated patterns as established strategies.
+
+## 2026-08-24 — Continuous market-intelligence research
+
+### User
+
+Required GreenBrain to spend ongoing time researching online trading information, remain aware of new discussions and developments, treat them as accumulated experience, and use them to generate better ideas.
+
+### Assistant and decision
+
+Added a Continuous Market Intelligence requirement with an important control: exhaustive coverage of the internet is impossible and novelty is not evidence. The research layer will continuously ingest allowlisted and legally accessible primary sources, research, official market/broker information, authorized transcripts, and selected practitioner discussions. Every item retains source, author, date, retrieval time, market relevance, credibility tier, and claims. External content enters an untrusted research memory as observations and hypotheses only; it cannot directly alter active strategies or issue orders. Ideas must pass deduplication, contradiction analysis, prompt-injection isolation, independent market-data testing, and the normal strategy promotion gates.
