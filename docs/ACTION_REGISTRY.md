@@ -22,7 +22,7 @@ This registry is the operational source of truth for product ideas, defects, req
 | GB-016 | High | Action | Planned | Add market-data integrity and stale-feed controls |
 | GB-017 | High | Action | Planned | Add leakage-safe datasets and purged walk-forward validation |
 | GB-018 | High | Action | Planned | Add notifications, incidents, and reconnect reporting |
-| GB-019 | Medium | Requirement | Planned | Build responsive web/PWA for Mac and mobile |
+| GB-019 | Medium | Requirement | In progress | Build responsive web/PWA for Mac and mobile |
 | GB-020 | Medium | Requirement | Planned | Export a complete user strategy compilation |
 
 ## Acceptance criteria for current in-progress work
@@ -60,3 +60,13 @@ This registry is the operational source of truth for product ideas, defects, req
 - Requires explicit confirmation for operational commands.
 - Cannot place orders, disable risk, or claim an action completed without backend evidence.
 - Persists conversation and action audit history.
+
+### GB-019 — Responsive web/PWA
+
+- Mac desktop and mobile navigation are implemented.
+- Command, Markets, Strategies, Research, Journal, Risk, Connections, and System areas are available.
+- GreenBrain chat remains accessible across operating areas.
+- Emergency state remains visible and cannot be hidden by navigation.
+- Loading, empty, failure, permission, confirmation, and reconciliation states are implemented.
+- All displayed operational data comes from authenticated backend evidence.
+- Accessibility and responsive production checks pass.
