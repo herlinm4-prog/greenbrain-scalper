@@ -51,11 +51,19 @@ export class GreenBrainCore {
   }
 
   async confirmAssisted(
-    decision: EngineDecision,
-    proposal: SignalProposal,
-    timestampMs: number,
+    request: Omit<ProcessSignalRequest, "automationMode">,
   ): Promise<OrderReceipt> {
-    if (decision.status !== "approved") throw new Error("Only an approved assisted decision can be confirmed");
-    return this.execution.execute(decision, proposal, timestampMs);
+    const decision = this.engine.evaluate(
+      request.tradingMode,
+      request.policy,
+      request.account,
+      request.market,
+      request.proposal,
+    );
+    await this.journal.recordDecision(request.proposal, decision, request.timestampMs);
+    if (decision.status !== "approved") {
+      throw new Error(`Assisted confirmation failed current checks: ${decision.reason}`);
+    }
+    return this.execution.execute(decision, request.proposal, request.timestampMs);
   }
 }
