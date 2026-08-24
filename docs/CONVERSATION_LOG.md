@@ -127,3 +127,13 @@ Required GreenBrain to analyze whether an observed advantage came from luck or f
 ### Assistant and decision
 
 Added an explicit statistical attribution requirement. GreenBrain will estimate the probability that net expectancy is genuinely positive using minimum sample sizes, confidence or posterior distributions, bootstrap/permutation tests, walk-forward and untouched out-of-sample data, regime consistency, counterfactual comparison, execution-cost sensitivity, and correction for testing many strategy candidates. Strategy establishment requires evidence of repeatability rather than isolated profit.
+
+## 2026-08-24 — Strategy research library and discovery reports
+
+### User
+
+Required GreenBrain to generate multiple methods and strategies through learning, produce documents that can be compiled into a personal strategy collection, detect unusual market behavior, discover functional patterns, and report those findings to the user.
+
+### Assistant and decision
+
+Added a Strategy Research Library and anomaly-discovery reporting requirement. GreenBrain will convert qualified observations into versioned human-readable strategy documents containing hypothesis, market context, entry and exit logic, invalidation, risk assumptions, evidence, costs, applicable regimes, failure modes, validation status, and lineage. Unusual observations remain labeled as anomalies or hypotheses until reproducible. The system will generate periodic discovery reports and maintain a user-exportable strategy compilation without exposing unvalidated patterns as established strategies.
