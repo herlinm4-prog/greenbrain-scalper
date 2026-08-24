@@ -1,47 +1,23 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GreenBrain Scalper</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <main class="shell">
-      <header>
-        <div>
-          <p class="eyebrow">MULTIMARKET INTELLIGENCE</p>
-          <h1>GreenBrain <span>Scalper</span></h1>
-        </div>
-        <div class="status"><i></i> DEMO MODE</div>
-      </header>
-      <section class="hero">
-        <div>
-          <p class="label">NEXT DECISION</p>
-          <h2 id="decision">WAIT</h2>
-          <p id="reason">Collecting simulated EUR/USD market context.</p>
-        </div>
-        <div class="confidence">
-          <strong id="confidence">0%</strong>
-          <span>CALIBRATED CONFIDENCE</span>
-        </div>
-      </section>
-      <section class="grid">
-        <article><p class="label">EUR / USD</p><strong id="price">1.10000</strong><small id="spread">Spread 0.8 bps</small></article>
-        <article><p class="label">MARKET REGIME</p><strong id="regime">OBSERVING</strong><small>Demo intelligence feed</small></article>
-        <article><p class="label">RISK ENGINE</p><strong class="safe">PROTECTED</strong><small>0.25% maximum risk</small></article>
-        <article><p class="label">SHADOW MARKET</p><strong id="survival">—</strong><small>Adverse scenarios passed</small></article>
-      </section>
-      <section class="console">
-        <div class="console-head"><div><i></i><i></i><i></i></div><span>GREENBRAIN CORE / DECISION LOG</span></div>
-        <ol id="log"></ol>
-      </section>
-      <footer>
-        <button id="approve" disabled>APPROVE</button>
-        <button id="reject" disabled>REJECT</button>
-        <button id="emergency">EMERGENCY STOP</button>
-      </footer>
-    </main>
-    <script src="app.js"></script>
-  </body>
-</html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GreenBrain</title><link rel="stylesheet" href="styles.css"></head>
+<body><main class="shell">
+<header><div><p class="eyebrow">AUTOMATED MARKET INTELLIGENCE</p><h1>GreenBrain</h1></div><div class="status"><i></i><span id="watchStatus">WATCHING MARKETS</span></div></header>
+<section class="hero"><div><p class="label">GREENBRAIN DECISION</p><h2 id="decision">WAIT</h2><p id="reason">Watching the market for a qualified opportunity.</p></div><div class="confidence"><strong id="confidence">0%</strong><span>OPPORTUNITY CONFIDENCE</span></div></section>
+<section class="money grid">
+<article><p class="label">TODAY</p><strong id="todayProfit">$0.00</strong><small id="winRate">No closed trades yet</small></article>
+<article><p class="label">RISK / TRADE</p><strong id="riskDisplay">$25</strong><small>GreenBrain calculates position size</small></article>
+<article><p class="label">STREAK</p><strong id="streak">—</strong><small id="streakText">Waiting for results</small></article>
+<article><p class="label">SYSTEM</p><strong class="safe" id="systemState">PROTECTED</strong><small>Daily limits active</small></article>
+</section>
+<section class="control">
+<div><p class="label">HOW MUCH CAN GREENBRAIN RISK?</p><div class="risk-buttons"><button data-risk="10">$10</button><button class="selected" data-risk="25">$25</button><button data-risk="50">$50</button><button data-risk="100">$100</button></div></div>
+<div><label>Trading style<select id="mode"><option value="safe">Safe</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></label><label>Daily profit goal<input id="profitGoal" type="number" value="100" min="1"></label><label>Daily loss limit<input id="lossLimit" type="number" value="50" min="1"></label></div>
+<div class="toggle-row"><label><input id="streakBoost" type="checkbox" checked> Alert me when a strong winning streak may justify reviewing risk</label></div>
+</section>
+<section id="alert" class="alert hidden"><strong id="alertTitle"></strong><span id="alertText"></span><button id="alertAction" class="hidden">REVIEW RISK</button></section>
+<section class="history"><div class="section-head"><div><p class="label">TRADING HISTORY</p><h3>GreenBrain Memory</h3></div><span id="historySummary">Monitoring every decision</span></div><div class="history-table"><div class="row head"><span>Time</span><span>Decision</span><span>Risk</span><span>Result</span></div><div id="historyRows"></div></div></section>
+<section class="console"><div class="console-head"><span>GREENBRAIN / LIVE MONITOR</span><span id="marketState">SCANNING</span></div><ol id="log"></ol></section>
+<footer><button id="startStop" class="primary">STOP AUTOMATION</button><button id="emergency">EMERGENCY STOP</button></footer>
+<p class="disclaimer">GreenBrain automates monitoring and risk controls; trading involves risk and profits are never guaranteed.</p>
+</main><script src="app.js"></script></body></html>
