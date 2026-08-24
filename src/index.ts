@@ -10,3 +10,4 @@ export * from "./execution-service.js";
 export * from "./position-ledger.js";
 export * from "./mt5-bridge.js";
 export * from "./trading-journal.js";
+export * from "./greenbrain-core.js";
