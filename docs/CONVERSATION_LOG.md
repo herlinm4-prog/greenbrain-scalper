@@ -157,3 +157,13 @@ Directed Codex to continue project development after defining AI-native strategy
 ### Assistant development outcome
 
 Implemented and pushed a typed strategy-attribution engine using sample sufficiency, out-of-sample expectancy, profit factor, maximum drawdown, regime stability, probability of positive edge, uncertainty penalty, and a multiple-candidate testing penalty. Added a versioned Strategy Research Library with Markdown export and a guard preventing unproven strategies from being marked validated or active. Added a Pattern Discovery Registry that keeps anomalies separate until repeatability evidence exists. Twenty-one automated tests and strict TypeScript validation passed; frontend remained untouched.
+
+## 2026-08-24 — Web application platform clarification
+
+### User
+
+Clarified that GreenBrain Scalper must be for Mac through the web, not a Windows application.
+
+### Assistant and decision
+
+Confirmed the product is a responsive browser-based web application/PWA accessible from macOS, iPhone, tablets, and other devices. Windows is not a user-facing platform requirement. A Windows VPS may host only the invisible MetaTrader 5 execution connector because MT5 requires that runtime boundary; users interact exclusively with the web application. Future broker APIs may use Linux services without an MT5 terminal.
