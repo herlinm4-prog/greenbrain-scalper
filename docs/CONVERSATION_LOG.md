@@ -2,6 +2,16 @@
 
 This chronological log preserves project intent and outcomes. It intentionally excludes credentials, secret material, internal tool output, and unrelated personal data.
 
+## 2026-08-24 — Decision Theater complete interface reconstruction
+
+### User
+
+Rejected further generic dashboard styling and directed Codex to continue until the professional web experience was complete. The product must feel emotionally motivating because it exists to pursue trading performance and capital growth, while retaining both dark and light themes.
+
+### Assistant development outcome
+
+Reconstructed the frontend architecture rather than applying another cosmetic skin. Replaced the permanent sidebar and card-first dashboard with GreenBrain Decision Theater: top-level product navigation, capital and protected-loss narrative, continuous market pulse, a primary market canvas, a central live AI decision, explainable evidence progression, strategy-learning path, next capital objective, best-strategy visibility, and permanent risk authority. Preserved Markets, Strategies, Research, Journal, Risk, Connections, System, assisted/automatic demo modes, emergency stop, GreenBrain conversation, responsive mobile navigation, and persistent dark/light themes. Added a new brand motif built around a living ascending intelligence curve, an abstract GreenBrain core, obsidian, emerald, champagne gold, and ivory. Updated the social preview and metadata. Production builds passed and the owner-only web application was updated.
+
 ## 2026-08-24 — Persistent dark and light themes
 
 ### User
