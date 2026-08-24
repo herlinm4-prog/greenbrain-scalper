@@ -14,3 +14,5 @@ export * from "./greenbrain-core.js";
 export * from "./strategy-attribution.js";
 export * from "./strategy-library.js";
 export * from "./pattern-discovery.js";
+export * from "./project-registry.js";
+export * from "./greenbrain-chat.js";
