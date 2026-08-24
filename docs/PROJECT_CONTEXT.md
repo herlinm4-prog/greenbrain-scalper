@@ -113,6 +113,16 @@ AlphaBrain, BrainDriver, Brain, and GreenBrain were rejected because of conflict
 - MT5 integration remains demo-only, with account allowlisting, heartbeat fail-closed behavior, idempotency, a dedicated magic number, and broker-hosted stop-loss/take-profit protection.
 - Closing or disconnecting the iMac must not interrupt the VPS execution boundary or safety controls.
 
+## Cloud deployment requirement
+
+- GreenBrain Scalper must run continuously without depending on the user's iMac being powered on.
+- The user interface will be a responsive web application/PWA accessible from phones, tablets, and computers.
+- Internet-facing application services and persistent data will run in managed cloud infrastructure.
+- MetaTrader 5 and its execution bridge will run on a dedicated Windows VPS near the broker server.
+- Client devices are supervision and control surfaces only; closing them must not interrupt the engine.
+- Remote access requires HTTPS, authenticated sessions, role-aware control, audit logging, and step-up confirmation for sensitive actions.
+- Cloud service failure or loss of heartbeat must fail closed for new orders while preserving broker-hosted protective stops.
+
 ## Current next milestone
 
 - Discuss and design MetaTrader 5 integration.
