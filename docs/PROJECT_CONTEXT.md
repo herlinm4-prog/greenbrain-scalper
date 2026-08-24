@@ -34,6 +34,8 @@ GreenBrain Scalper is an artificial intelligence system specialized in short-hor
 
 ## Strategy discovery and promotion
 
+The learning system must explicitly estimate luck-versus-skill attribution. It will quantify the probability that net expectancy is positive and repeatable using sample sufficiency, uncertainty intervals or posterior probability, bootstrap/permutation testing, walk-forward and untouched out-of-sample evaluation, regime consistency, counterfactual baselines, execution-cost sensitivity, and multiple-testing correction. Strategy promotion thresholds must be configurable and auditable.
+
 Profitable patterns, features, decision functions, and contextual behaviors are retained as attributed evidence and may generate versioned strategy candidates. A winning trade or short profitable period never authorizes automatic activation. Candidates must pass minimum-sample, net-expectancy, drawdown, regime-stability, replay, out-of-sample, execution-cost, and independent demo shadow gates. Approved candidates enter the active strategy registry with lineage, metrics, limits, and rollback support. Losing trades, abstentions, and rejected proposals remain part of the evidence set to avoid survivorship bias.
 
 ## Differentiating capabilities
