@@ -207,3 +207,13 @@ Required replacing the generic frontend appearance with an original, professiona
 ### Assistant development outcome
 
 Redesigned the existing web application without removing its operational areas or changing backend behavior. Replaced the generic rounded-card/neon-dashboard language with a proprietary GreenBrain operating-system identity: numbered navigation, angular GB mark, technical/editorial typography, asymmetric hierarchy, controlled acid-lime signal color, sharper instrument surfaces, stronger market/decision/risk prioritization, and a reworked conversational control drawer. Added a matching 1200×630 branded social preview and Open Graph/X metadata. Production builds passed and the existing site was updated rather than creating a replacement project.
+
+## 2026-08-24 — Typography readability correction
+
+### User
+
+Required the redesigned frontend to account for text size and legibility.
+
+### Assistant development outcome
+
+Corrected the visual system without reverting the new identity. Increased minimum sizes for navigation, labels, tables, decision logs, controls, secondary explanations, risk data, connection information, and GreenBrain chat; raised secondary-text contrast; improved line height; and applied a larger mobile reading scale. The production build passed and the updated typography was deployed to the existing site.
