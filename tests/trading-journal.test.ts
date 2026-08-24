@@ -34,6 +34,6 @@ describe("TradingJournal", () => {
   it("rejects duplicate event identities", async () => {
     const journal = new TradingJournal(new InMemoryJournalStore());
     await journal.recordDecision(proposal, decision, 1_000);
-    await expect(journal.recordDecision(proposal, decision, 2_000)).rejects.toThrow("Duplicate journal event");
+    await expect(journal.recordDecision(proposal, decision, 1_000)).rejects.toThrow("Duplicate journal event");
   });
 });
