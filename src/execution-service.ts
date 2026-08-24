@@ -2,11 +2,15 @@ import type { BrokerAdapter, UniversalOrder } from "./broker.js";
 import type { EngineDecision } from "./trading-engine.js";
 import type { SignalProposal } from "./domain.js";
 import { ExecutionLedger } from "./execution-ledger.js";
+import { PositionLedger } from "./position-ledger.js";
+import { TradingJournal } from "./trading-journal.js";
 
 export class ExecutionService {
   constructor(
     private readonly broker: BrokerAdapter,
     private readonly ledger: ExecutionLedger,
+    private readonly positions?: PositionLedger,
+    private readonly journal?: TradingJournal,
   ) {}
 
   async execute(
@@ -34,8 +38,14 @@ export class ExecutionService {
     };
 
     this.ledger.register(order);
+    await this.journal?.recordOrder(order);
     const receipt = await this.broker.submit(order);
     this.ledger.record(receipt);
+    await this.journal?.recordReceipt(receipt);
+    if (receipt.status === "filled") {
+      const position = this.positions?.openFromFill(order, receipt);
+      if (position) await this.journal?.recordPosition(position, receipt.timestampMs);
+    }
     return receipt;
   }
 }
