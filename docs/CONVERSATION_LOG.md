@@ -147,3 +147,13 @@ Required GreenBrain to spend ongoing time researching online trading information
 ### Assistant and decision
 
 Added a Continuous Market Intelligence requirement with an important control: exhaustive coverage of the internet is impossible and novelty is not evidence. The research layer will continuously ingest allowlisted and legally accessible primary sources, research, official market/broker information, authorized transcripts, and selected practitioner discussions. Every item retains source, author, date, retrieval time, market relevance, credibility tier, and claims. External content enters an untrusted research memory as observations and hypotheses only; it cannot directly alter active strategies or issue orders. Ideas must pass deduplication, contradiction analysis, prompt-injection isolation, independent market-data testing, and the normal strategy promotion gates.
+
+## 2026-08-24 — Strategy learning subsystem implemented
+
+### User
+
+Directed Codex to continue project development after defining AI-native strategy discovery, luck-versus-skill attribution, documents, and continuous research requirements.
+
+### Assistant development outcome
+
+Implemented and pushed a typed strategy-attribution engine using sample sufficiency, out-of-sample expectancy, profit factor, maximum drawdown, regime stability, probability of positive edge, uncertainty penalty, and a multiple-candidate testing penalty. Added a versioned Strategy Research Library with Markdown export and a guard preventing unproven strategies from being marked validated or active. Added a Pattern Discovery Registry that keeps anomalies separate until repeatability evidence exists. Twenty-one automated tests and strict TypeScript validation passed; frontend remained untouched.
