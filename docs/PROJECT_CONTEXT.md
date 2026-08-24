@@ -38,6 +38,10 @@ The learning system must explicitly estimate luck-versus-skill attribution. It w
 
 Profitable patterns, features, decision functions, and contextual behaviors are retained as attributed evidence and may generate versioned strategy candidates. A winning trade or short profitable period never authorizes automatic activation. Candidates must pass minimum-sample, net-expectancy, drawdown, regime-stability, replay, out-of-sample, execution-cost, and independent demo shadow gates. Approved candidates enter the active strategy registry with lineage, metrics, limits, and rollback support. Losing trades, abstentions, and rejected proposals remain part of the evidence set to avoid survivorship bias.
 
+## Strategy Research Library
+
+GreenBrain must generate diverse strategy and methodology candidates from accumulated evidence and maintain a user-facing, exportable compilation. Each versioned strategy document must include its hypothesis, discovered pattern, instruments and regimes, required features, entry/exit and abstention logic, invalidation conditions, risk assumptions, expected holding horizon, transaction-cost sensitivity, supporting and contradicting evidence, sample size, validation results, failure modes, confidence, lineage, and status. The system must also surface unusual behaviors through anomaly reports, explain why they are unusual, search for repeatability and plausible market mechanisms, and clearly distinguish observation, hypothesis, candidate, validated strategy, and retired strategy. Periodic discovery reports must provide actionable information without presenting noise as fact.
+
 ## Differentiating capabilities
 
 ### Shadow Market
