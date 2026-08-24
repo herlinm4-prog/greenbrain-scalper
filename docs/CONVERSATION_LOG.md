@@ -57,3 +57,13 @@ Requested a discussion to define how GreenBrain Scalper will integrate with Meta
 ### Status
 
 Architecture discussion is the next active milestone. No MT5 adapter implementation should begin until runtime placement, data path, execution authority, and disconnect behavior are defined.
+
+## 2026-08-24 — MT5 runtime placement
+
+### User
+
+Confirmed the available personal computer is an Apple Silicon iMac.
+
+### Assistant and decision
+
+Selected a split deployment: the iMac will run the GreenBrain dashboard, configuration, analysis, and supervision, while MetaTrader 5 and the execution bridge will run continuously on a Windows VPS near the broker server. This avoids macOS emulation as an execution dependency and allows operation when the iMac is offline. The first integration remains locked to MT5 demo accounts.
