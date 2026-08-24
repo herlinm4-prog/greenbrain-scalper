@@ -187,3 +187,13 @@ Directed Codex to continue autonomous project development.
 ### Assistant development outcome
 
 Implemented and pushed an MT5-calculation-based Forex position sizer using account-currency profit estimation, margin estimation, symbol volume minimum/maximum/step, contract and tick specifications, stop-direction validation, and conservative downward volume rounding. Added EUR/USD, USD/JPY, and GBP/USD tests. Implemented the first PostgreSQL migration and a transactional event-store adapter supporting unique event identities, atomic batches, rollback, and ordered replay. Thirty-four automated tests and strict TypeScript validation passed. GB-004 and GB-005 remain in progress until physical MT5 integration and real PostgreSQL integration/backup tests are completed.
+
+## 2026-08-24 — First responsive frontend checkpoint
+
+### User
+
+Directed Codex to advance into frontend development with deep critical review and all necessary operational options.
+
+### Assistant development outcome
+
+Built and deployed the first responsive GreenBrain web application checkpoint for Mac and mobile. Added Command, Markets, Strategies, Research, Journal, Risk, Connections, and System workspaces; Assisted and Automatic Demo controls; persistent emergency-stop feedback; MT5 demo status; AI decision evidence; risk envelope; strategy evidence states; research contradictions; operational health; action registry access; and a cross-workspace GreenBrain chat drawer. Added a frontend functional audit and acceptance criteria to GitHub. The production build passed and the checkpoint deployment succeeded at https://greenbrain-scalper.herlingym.chatgpt.site. The interface currently uses representative demo data and remains in progress until authenticated backend integration and complete failure/permission/confirmation states are implemented.
