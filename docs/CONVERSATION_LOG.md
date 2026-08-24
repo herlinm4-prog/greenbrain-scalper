@@ -77,3 +77,13 @@ Confirmed that an existing MetaTrader 5 demo account will be used to test GreenB
 ### Assistant and decision
 
 GreenBrain will connect to the already-created demo account through the MT5 terminal on Windows. Broker credentials will remain inside MetaTrader 5 and will not be stored by GreenBrain. Experimental improvement will use versioned strategies, recorded decisions, replay, out-of-sample evaluation, and promotion gates based on expectancy, drawdown, profit factor, execution cost, and confidence calibration—not win rate alone. Live-money execution remains disabled.
+
+## 2026-08-24 — Cloud-hosted application requirement
+
+### User
+
+Specified that the completed application must run continuously on internet infrastructure rather than requiring the personal iMac to remain powered on, and must be accessible securely from a phone or any other device at any time.
+
+### Assistant and decision
+
+GreenBrain Scalper will be delivered as a responsive web application/PWA backed by continuously running cloud services. The target production topology separates the internet-facing application and data services from the Windows MT5 execution node. The MT5 node should be placed near the broker server because latency and connection stability matter more than raw compute for scalping. The iMac and phone are clients only; disconnecting them must not stop analysis, demo execution, logging, or safety controls.
