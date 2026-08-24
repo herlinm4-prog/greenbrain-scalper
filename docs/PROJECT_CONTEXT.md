@@ -32,6 +32,10 @@ GreenBrain Scalper is an artificial intelligence system specialized in short-hor
 - Stop only for credentials, real-money authority, legal decisions, destructive actions, or choices that materially change the product.
 - Preserve existing working behavior and make focused, verified changes.
 
+## Strategy discovery and promotion
+
+Profitable patterns, features, decision functions, and contextual behaviors are retained as attributed evidence and may generate versioned strategy candidates. A winning trade or short profitable period never authorizes automatic activation. Candidates must pass minimum-sample, net-expectancy, drawdown, regime-stability, replay, out-of-sample, execution-cost, and independent demo shadow gates. Approved candidates enter the active strategy registry with lineage, metrics, limits, and rollback support. Losing trades, abstentions, and rejected proposals remain part of the evidence set to avoid survivorship bias.
+
 ## Differentiating capabilities
 
 ### Shadow Market
