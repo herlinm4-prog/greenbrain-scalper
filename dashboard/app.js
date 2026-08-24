@@ -1,50 +1,15 @@
-const $ = (id) => document.getElementById(id);
-const state = { mid: 1.1, tick: 0, halted: false, seed: 91 };
-
-function random() {
-  state.seed = (1664525 * state.seed + 1013904223) >>> 0;
-  return state.seed / 4294967296;
-}
-
-function log(message) {
-  const item = document.createElement("li");
-  item.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
-  $("log").prepend(item);
-  while ($("log").children.length > 8) $("log").lastChild.remove();
-}
-
-function tick() {
-  if (state.halted) return;
-  const movement = (random() - 0.5) * 0.00035;
-  state.mid += movement;
-  state.tick += 1;
-  const momentum = movement / state.mid;
-  const confidence = Math.min(88, Math.round(45 + Math.abs(momentum) * 170000));
-  const actionable = confidence >= 65;
-  const direction = movement > 0 ? "BUY" : "SELL";
-
-  $("price").textContent = state.mid.toFixed(5);
-  $("confidence").textContent = `${confidence}%`;
-  $("regime").textContent = Math.abs(momentum) > 0.00009 ? "EXPANSION" : "RANGING";
-  $("survival").textContent = actionable ? `${Math.round(confidence * 0.82)}%` : "TESTING";
-  $("decision").textContent = actionable ? direction : "WAIT";
-  $("reason").textContent = actionable
-    ? "Synthetic momentum passed the demonstration threshold. No real order will be placed."
-    : "Confidence remains below the execution threshold.";
-  $("approve").disabled = !actionable;
-  $("reject").disabled = !actionable;
-  if (state.tick % 3 === 0) log(actionable ? `${direction} hypothesis sent to shadow market.` : "No-trade decision preserved capital.");
-}
-
-$("emergency").addEventListener("click", () => {
-  state.halted = true;
-  $("decision").textContent = "HALTED";
-  $("reason").textContent = "Emergency stop engaged. All automated decisions are frozen.";
-  $("approve").disabled = true;
-  $("reject").disabled = true;
-  log("EMERGENCY STOP ENGAGED");
-});
-
-log("GreenBrain Core initialized in demo mode.");
-setInterval(tick, 1200);
-tick();
+const $=id=>document.getElementById(id);
+const state={mid:1.1,tick:0,running:true,halted:false,seed:91,risk:25,profit:0,wins:0,losses:0,winStreak:0,history:[]};
+function random(){state.seed=(1664525*state.seed+1013904223)>>>0;return state.seed/4294967296}
+function money(v){return `${v>=0?"":"-"}$${Math.abs(v).toFixed(2)}`}
+function log(message){const item=document.createElement("li");item.textContent=`${new Date().toLocaleTimeString()}  ${message}`;$("log").prepend(item);while($("log").children.length>8)$("log").lastChild.remove()}
+function showAlert(title,text,action=false){$("alertTitle").textContent=title;$("alertText").textContent=text;$("alert").classList.remove("hidden");$("alertAction").classList.toggle("hidden",!action)}
+function updateDashboard(){$("todayProfit").textContent=money(state.profit);$("todayProfit").className=state.profit>0?"positive":state.profit<0?"negative":"";$("riskDisplay").textContent=`$${state.risk}`;const total=state.wins+state.losses;$("winRate").textContent=total?`${state.wins} wins · ${Math.round(state.wins/total*100)}% win rate`:"No closed trades yet";$("streak").textContent=state.winStreak?`${state.winStreak} WINS`:"—";$("streakText").textContent=state.winStreak>=3?"Strong run detected":state.winStreak?"Positive sequence":"Waiting for results"}
+function addHistory(side,result){state.history.unshift({time:new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),side,risk:state.risk,result});state.history=state.history.slice(0,12);$("historyRows").innerHTML=state.history.map(t=>`<div class="row"><span>${t.time}</span><span>${t.side}</span><span>$${t.risk}</span><span class="${t.result>=0?'positive':'negative'}">${money(t.result)}</span></div>`).join("");$("historySummary").textContent=`${state.history.length} recent trades monitored`}
+function closeSimulatedTrade(side){const won=random()>.44;const result=won?state.risk*(.65+random()*.65):-state.risk;state.profit+=result;if(won){state.wins++;state.winStreak++;showAlert("PROFIT ALERT",`${side} closed ${money(result)}. GreenBrain recorded the result.`)}else{state.losses++;state.winStreak=0;showAlert("RISK ALERT",`${side} closed ${money(result)}. Risk remains limited to $${state.risk}.`)}addHistory(side,result);updateDashboard();const goal=Number($("profitGoal").value)||100,limit=Number($("lossLimit").value)||50;if(state.profit>=goal){state.running=false;showAlert("DAILY GOAL REACHED",`${money(state.profit)} today. Automation paused to protect the session.`)}else if(state.profit<=-limit){state.running=false;showAlert("DAILY LOSS LIMIT",`GreenBrain stopped new trades at ${money(state.profit)}.`)}else if(state.winStreak>=3&&$("streakBoost").checked){showAlert("GREEN STREAK",`${state.winStreak} wins in a row. Performance is strong. Review risk before changing it.`,true)}}
+function tick(){if(!state.running||state.halted)return;const movement=(random()-.5)*.00035;state.mid+=movement;state.tick++;const momentum=movement/state.mid;const confidence=Math.min(91,Math.round(45+Math.abs(momentum)*170000));const actionable=confidence>=70;const direction=movement>0?"BUY":"SELL";$("confidence").textContent=`${confidence}%`;$("decision").textContent=actionable?direction:"WAIT";$("reason").textContent=actionable?`Qualified ${direction} opportunity detected. Risk engine is checking limits.`:"Watching continuously. No qualified trade is better than a weak trade.";$("marketState").textContent=actionable?"OPPORTUNITY":"SCANNING";if(state.tick%4===0)log(actionable?`${direction} opportunity · confidence ${confidence}% · risk cap $${state.risk}`:"Market scanned · no qualified opportunity");if(actionable&&state.tick%7===0)closeSimulatedTrade(direction)}
+document.querySelectorAll("[data-risk]").forEach(b=>b.addEventListener("click",()=>{state.risk=Number(b.dataset.risk);document.querySelectorAll("[data-risk]").forEach(x=>x.classList.toggle("selected",x===b));updateDashboard();log(`Risk per trade changed to $${state.risk}`)}));
+$("alertAction").addEventListener("click",()=>document.querySelector(".control").scrollIntoView({behavior:"smooth"}));
+$("startStop").addEventListener("click",()=>{if(state.halted)return;state.running=!state.running;$("startStop").textContent=state.running?"STOP AUTOMATION":"START AUTOMATION";$("watchStatus").textContent=state.running?"WATCHING MARKETS":"PAUSED";$("systemState").textContent=state.running?"PROTECTED":"PAUSED";log(state.running?"Automation resumed":"Automation paused")});
+$("emergency").addEventListener("click",()=>{state.halted=true;state.running=false;$("decision").textContent="HALTED";$("reason").textContent="Emergency stop engaged. New automated decisions are frozen.";$("watchStatus").textContent="EMERGENCY STOP";$("systemState").textContent="HALTED";$("startStop").disabled=true;showAlert("EMERGENCY STOP","Automation is frozen. No new trades can be initiated.");log("EMERGENCY STOP ENGAGED")});
+log("GreenBrain is watching the market.");updateDashboard();setInterval(tick,1200);tick();
