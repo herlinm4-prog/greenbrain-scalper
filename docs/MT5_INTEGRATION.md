@@ -33,3 +33,12 @@ When the bridge heartbeat expires, the account identity changes, the returned qu
 
 Demo results do not authorize live trading. Strategy candidates must remain versioned and must pass replay, out-of-sample, execution-cost, drawdown, expectancy, and confidence-calibration gates. Win rate alone is not a promotion metric.
 
+## Implemented physical bridge
+
+The repository now includes `bridge/mt5_bridge.py`, a Windows-local FastAPI service using MetaQuotes' official Python package, and `Mt5HttpTransport`, the TypeScript cloud-side client.
+
+The bridge exposes authenticated HTTPS contracts for account identity, heartbeat, symbol ticks, `order_check`, and `order_send`. It reads the account already signed into the terminal and never receives the MT5 password. A local SQLite idempotency ledger blocks repeated universal order IDs across process restarts.
+
+Before the first demo test, the account owner must provide only the MT5 demo login number and exact demo server name for the allowlist, then run the bridge beside the signed-in Windows MT5 terminal. The bridge token must be generated independently and stored as a server secret, never pasted into source control.
+
+Physical validation remains incomplete until the Windows node is available. Required acceptance evidence is: verified demo trade mode, matching login/server, fresh tick stream, successful dry preflight, one minimum-size order with broker-hosted stop-loss/take-profit, receipt reconciliation, forced-disconnect fail-closed behavior, and duplicate replay rejection.
