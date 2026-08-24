@@ -97,3 +97,13 @@ Directed Codex to advance as far as possible through the backend and infrastruct
 ### Assistant development outcome
 
 Implemented and pushed the typed MT5 demo adapter boundary, demo account and server allowlisting, heartbeat fail-closed behavior, order preflight contract, duplicate protection, position lifecycle, realized and unrealized P&L, append-only research journal abstraction, and the GreenBrain application service joining assisted/automatic decisions with controlled execution. The dashboard was not modified. Seventeen automated tests and strict TypeScript validation passed locally.
+
+## 2026-08-24 — Core product identity reaffirmed
+
+### User
+
+Clarified before further development that GreenBrain Scalper must be an artificial intelligence specifically built to perform scalping trading, not merely a conventional trading application.
+
+### Assistant and decision
+
+Reaffirmed GreenBrain Scalper as an AI-native scalping system. The AI layer will analyze market context and microstructure, generate and challenge trade hypotheses, estimate calibrated confidence, and learn from versioned experimental evidence. Deterministic services retain final authority over risk, execution, account safety, and demo-only enforcement. A fixed-rule bot or MT5 control panel alone does not satisfy the product requirement.
