@@ -1,0 +1,16 @@
+{
+  "name": "greenbrain-scalper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multimarket AI scalping research platform with demo-only execution",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
