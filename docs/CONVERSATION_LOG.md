@@ -2,6 +2,16 @@
 
 This chronological log preserves project intent and outcomes. It intentionally excludes credentials, secret material, internal tool output, and unrelated personal data.
 
+## 2026-08-24 — Persistent dark and light themes
+
+### User
+
+Required at least two alternative interface themes: dark and light.
+
+### Assistant development outcome
+
+Added a persistent theme selector to the desktop and mobile interface. The dark theme emphasizes concentration, speed, and performance through graphite, deep navy, blue, and emerald. The light theme is a distinct warm-wealth environment using mineral ivory, charcoal, controlled emerald, cobalt, and restrained champagne accents rather than a mechanical color inversion. Theme selection is stored locally on the device. Existing product functions and demo-only behavior were preserved, and the production build passed.
+
 ## 2026-08-24 — Commercial premium visual redesign
 
 ### User
