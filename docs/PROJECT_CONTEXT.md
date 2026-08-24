@@ -142,6 +142,15 @@ AlphaBrain, BrainDriver, Brain, and GreenBrain were rejected because of conflict
 - Remote access requires HTTPS, authenticated sessions, role-aware control, audit logging, and step-up confirmation for sensitive actions.
 - Cloud service failure or loss of heartbeat must fail closed for new orders while preserving broker-hosted protective stops.
 
+## Product audit and idea control
+
+- `docs/PRODUCT_AUDIT.md` is the critical audit and release-gate record.
+- `docs/ACTION_REGISTRY.md` is the operational source of truth for ideas, requirements, defects, decisions, and actions.
+- Every substantive new idea must receive an identifier, priority, status, relationships, and testable acceptance criteria before being marked verified.
+- GreenBrain includes a conversational assistant for questions, decision explanations, research, reports, and allowlisted operational proposals.
+- Chat proposals expire and require explicit confirmation. Chat cannot directly execute an order, bypass risk, disable safety, or claim success without backend evidence.
+- A dedicated GreenBrain-Scalper API key exists outside GitHub; secret material must never enter repository content, logs, client code, or chat history.
+
 ## Current next milestone
 
 - Discuss and design MetaTrader 5 integration.
