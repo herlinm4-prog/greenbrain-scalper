@@ -55,7 +55,7 @@ export class TradingJournal {
 
   recordDecision(proposal: SignalProposal, decision: EngineDecision, timestampMs: number): Promise<void> {
     return this.store.append({
-      id: `decision:${proposal.id}`,
+      id: `decision:${proposal.id}:${timestampMs}`,
       type: "decision",
       timestampMs,
       proposal,
