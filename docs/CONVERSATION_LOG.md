@@ -167,3 +167,13 @@ Clarified that GreenBrain Scalper must be for Mac through the web, not a Windows
 ### Assistant and decision
 
 Confirmed the product is a responsive browser-based web application/PWA accessible from macOS, iPhone, tablets, and other devices. Windows is not a user-facing platform requirement. A Windows VPS may host only the invisible MetaTrader 5 execution connector because MT5 requires that runtime boundary; users interact exclusively with the web application. Future broker APIs may use Linux services without an MT5 terminal.
+
+## 2026-08-24 — Critical audit, action registry, and GreenBrain chat
+
+### User
+
+Requested a highly critical audit of every required software function, correction of errors, permanent capture of every new idea as an available action, and a small conversational GreenBrain chat capable of discussing the system and proposing commands.
+
+### Assistant development outcome
+
+Created a dedicated GreenBrain-Scalper OpenAI project key through the secure flow and stored it outside GitHub. Audited architecture, trading safety, AI learning, MT5, cloud readiness, data integrity, research, and UX. Documented thirteen critical/high findings and release gates. Corrected stale assisted confirmation by requiring fresh market/account/risk evaluation, updated decision event identity to preserve legitimate reevaluations, added a typed Project Registry with acceptance criteria and lifecycle states, and added a GreenBrain Chat boundary with allowlisted expiring command proposals requiring explicit confirmation. Direct orders and risk bypass are not chat commands. Twenty-five automated tests and strict TypeScript validation passed.
