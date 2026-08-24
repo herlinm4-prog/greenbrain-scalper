@@ -42,6 +42,10 @@ Profitable patterns, features, decision functions, and contextual behaviors are 
 
 GreenBrain must generate diverse strategy and methodology candidates from accumulated evidence and maintain a user-facing, exportable compilation. Each versioned strategy document must include its hypothesis, discovered pattern, instruments and regimes, required features, entry/exit and abstention logic, invalidation conditions, risk assumptions, expected holding horizon, transaction-cost sensitivity, supporting and contradicting evidence, sample size, validation results, failure modes, confidence, lineage, and status. The system must also surface unusual behaviors through anomaly reports, explain why they are unusual, search for repeatability and plausible market mechanisms, and clearly distinguish observation, hypothesis, candidate, validated strategy, and retired strategy. Periodic discovery reports must provide actionable information without presenting noise as fact.
 
+## Continuous Market Intelligence
+
+GreenBrain must maintain an ongoing research pipeline for new trading research, official market and broker information, market-structure developments, authorized educational material, and selected practitioner discussions. Exhaustive internet coverage is neither possible nor a quality target. Sources must be allowlisted and tiered by authority, with provenance, author, publication and retrieval dates, market relevance, claims, contradictions, and applicable instruments preserved. External content is untrusted research input: it is isolated from execution instructions, deduplicated, checked for prompt injection and manipulation, compared against contrary evidence, and converted only into observations or hypotheses. No internet claim may modify an active strategy or trigger an order without independent market-data validation and normal promotion gates. Research outputs feed idea generation, anomaly investigation, knowledge-gap tracking, and user-facing intelligence briefs.
+
 ## Differentiating capabilities
 
 ### Shadow Market
