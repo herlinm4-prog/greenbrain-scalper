@@ -177,3 +177,13 @@ Requested a highly critical audit of every required software function, correctio
 ### Assistant development outcome
 
 Created a dedicated GreenBrain-Scalper OpenAI project key through the secure flow and stored it outside GitHub. Audited architecture, trading safety, AI learning, MT5, cloud readiness, data integrity, research, and UX. Documented thirteen critical/high findings and release gates. Corrected stale assisted confirmation by requiring fresh market/account/risk evaluation, updated decision event identity to preserve legitimate reevaluations, added a typed Project Registry with acceptance criteria and lifecycle states, and added a GreenBrain Chat boundary with allowlisted expiring command proposals requiring explicit confirmation. Direct orders and risk bypass are not chat commands. Twenty-five automated tests and strict TypeScript validation passed.
+
+## 2026-08-24 — Forex sizing and PostgreSQL persistence foundations
+
+### User
+
+Directed Codex to continue autonomous project development.
+
+### Assistant development outcome
+
+Implemented and pushed an MT5-calculation-based Forex position sizer using account-currency profit estimation, margin estimation, symbol volume minimum/maximum/step, contract and tick specifications, stop-direction validation, and conservative downward volume rounding. Added EUR/USD, USD/JPY, and GBP/USD tests. Implemented the first PostgreSQL migration and a transactional event-store adapter supporting unique event identities, atomic batches, rollback, and ordered replay. Thirty-four automated tests and strict TypeScript validation passed. GB-004 and GB-005 remain in progress until physical MT5 integration and real PostgreSQL integration/backup tests are completed.
