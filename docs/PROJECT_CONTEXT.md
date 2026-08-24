@@ -134,7 +134,8 @@ AlphaBrain, BrainDriver, Brain, and GreenBrain were rejected because of conflict
 ## Cloud deployment requirement
 
 - GreenBrain Scalper must run continuously without depending on the user's iMac being powered on.
-- The user interface will be a responsive web application/PWA accessible from phones, tablets, and computers.
+- The user-facing product is a responsive web application/PWA designed for macOS browsers, iPhone, tablets, and other modern devices; it is not a Windows desktop application.\n- Windows is only an infrastructure detail for the hidden MT5 execution connector on its VPS; users never need to operate GreenBrain through Windows.
+
 - Internet-facing application services and persistent data will run in managed cloud infrastructure.
 - MetaTrader 5 and its execution bridge will run on a dedicated Windows VPS near the broker server.
 - Client devices are supervision and control surfaces only; closing them must not interrupt the engine.
