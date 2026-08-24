@@ -2,6 +2,16 @@
 
 This chronological log preserves project intent and outcomes. It intentionally excludes credentials, secret material, internal tool output, and unrelated personal data.
 
+## 2026-08-24 — Physical MT5 demo integration implemented
+
+### User
+
+Directed Codex to integrate GreenBrain with the existing MT5 demo account so real demo-market testing and profitability evaluation can begin.
+
+### Assistant development outcome
+
+Implemented the physical integration layer while preserving the demo-only boundary. Added a Windows-local FastAPI bridge using MetaQuotes' official Python package and a cloud-side TypeScript HTTPS transport. The bridge reads the account already signed into MT5 and never accepts or stores the MT5 password. It enforces demo trade mode, exact login/server identity, bearer authentication, HTTPS outside localhost, symbol allowlisting, maximum lot size, broker volume constraints, directional stop-loss/take-profit validation, magic-number identity, order_check before order_send, heartbeat health, and persistent duplicate-order blocking. Added deployment documentation and transport safety tests. Thirty-seven automated tests passed and strict TypeScript validation passed. Physical account validation remains blocked only by the absence of a running Windows MT5 node signed into the user's demo account.
+
 ## 2026-08-24 — Decision Theater complete interface reconstruction
 
 ### User
