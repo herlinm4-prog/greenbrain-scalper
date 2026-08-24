@@ -2,6 +2,16 @@
 
 This chronological log preserves project intent and outcomes. It intentionally excludes credentials, secret material, internal tool output, and unrelated personal data.
 
+## 2026-08-24 — Profit-and-efficiency experience loop
+
+### User
+
+Reaffirmed the central product loop: identify an opportunity, invest, return with profit, learn from the experience, and improve task efficiency.
+
+### Assistant development outcome
+
+Formalized the objective as opportunity detection, selective capital allocation, protected execution, net outcome measurement, experience attribution, and efficiency improvement. Implemented an Experience Loop that calculates gross P&L, spread, commission, slippage, net P&L, net return in R, cost drag, favorable-move capture efficiency, and win/loss outcome. Rejected opportunities are also evaluated later as protected-capital events, missed opportunities, or unresolved decisions, preventing the AI from learning only from trades it took. Net executed outcomes feed the existing luck-versus-skill attribution engine. Forty automated tests and strict TypeScript validation passed.
+
 ## 2026-08-24 — Physical MT5 demo integration implemented
 
 ### User
