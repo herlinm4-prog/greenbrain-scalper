@@ -105,6 +105,14 @@ AlphaBrain, BrainDriver, Brain, and GreenBrain were rejected because of conflict
 - Technical block against live-broker execution.
 - Seven automated tests and strict TypeScript validation passing.
 
+## MetaTrader 5 target architecture
+
+- The user's Apple Silicon iMac is the control and development workstation.
+- MetaTrader 5 and the GreenBrain MT5 Bridge will run on a Windows VPS near the broker server.
+- The first bridge uses the official MetaTrader 5 Python integration; a native MQL5 Expert Advisor bridge may be evaluated later for latency-sensitive execution.
+- MT5 integration remains demo-only, with account allowlisting, heartbeat fail-closed behavior, idempotency, a dedicated magic number, and broker-hosted stop-loss/take-profit protection.
+- Closing or disconnecting the iMac must not interrupt the VPS execution boundary or safety controls.
+
 ## Current next milestone
 
 - Discuss and design MetaTrader 5 integration.
