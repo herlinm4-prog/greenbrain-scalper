@@ -16,3 +16,4 @@ export * from "./strategy-library.js";
 export * from "./pattern-discovery.js";
 export * from "./project-registry.js";
 export * from "./greenbrain-chat.js";
+export * from "./forex-position-sizer.js";
