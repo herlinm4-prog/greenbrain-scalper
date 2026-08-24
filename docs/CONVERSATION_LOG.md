@@ -107,3 +107,13 @@ Clarified before further development that GreenBrain Scalper must be an artifici
 ### Assistant and decision
 
 Reaffirmed GreenBrain Scalper as an AI-native scalping system. The AI layer will analyze market context and microstructure, generate and challenge trade hypotheses, estimate calibrated confidence, and learn from versioned experimental evidence. Deterministic services retain final authority over risk, execution, account safety, and demo-only enforcement. A fixed-rule bot or MT5 control panel alone does not satisfy the product requirement.
+
+## 2026-08-24 — Strategy learning and promotion
+
+### User
+
+Required the AI to preserve and improve functions or behaviors that generate profits and progressively establish them as strategies.
+
+### Assistant and decision
+
+Accepted this as a core learning capability with controlled promotion. Profitable behavior is first stored as attributed evidence and a versioned strategy candidate, not immediately activated. Candidates must demonstrate sufficient sample size, positive expectancy after spread/slippage/latency, controlled drawdown, stability across regimes, replay and out-of-sample performance, and independent demo shadow performance. Only candidates passing promotion gates may become active strategies; previous versions remain available for rollback. Losses and rejected trades remain in memory to prevent survivorship bias.
