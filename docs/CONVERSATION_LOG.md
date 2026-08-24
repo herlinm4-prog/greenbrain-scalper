@@ -67,3 +67,13 @@ Confirmed the available personal computer is an Apple Silicon iMac.
 ### Assistant and decision
 
 Selected a split deployment: the iMac will run the GreenBrain dashboard, configuration, analysis, and supervision, while MetaTrader 5 and the execution bridge will run continuously on a Windows VPS near the broker server. This avoids macOS emulation as an execution dependency and allows operation when the iMac is offline. The first integration remains locked to MT5 demo accounts.
+
+## 2026-08-24 — Existing MT5 demo account
+
+### User
+
+Confirmed that an existing MetaTrader 5 demo account will be used to test GreenBrain, measure its decisions, and improve the system before any future readiness assessment.
+
+### Assistant and decision
+
+GreenBrain will connect to the already-created demo account through the MT5 terminal on Windows. Broker credentials will remain inside MetaTrader 5 and will not be stored by GreenBrain. Experimental improvement will use versioned strategies, recorded decisions, replay, out-of-sample evaluation, and promotion gates based on expectancy, drawdown, profit factor, execution cost, and confidence calibration—not win rate alone. Live-money execution remains disabled.
