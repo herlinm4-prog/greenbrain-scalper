@@ -2,6 +2,16 @@
 
 This chronological log preserves project intent and outcomes. It intentionally excludes credentials, secret material, internal tool output, and unrelated personal data.
 
+## 2026-08-24 — Commercial premium visual redesign
+
+### User
+
+Required moving away from an old green-monitor aesthetic and creating a commercial look that average users perceive as reliable, credible, beautiful, attractive, competitive, and high-status.
+
+### Assistant development outcome
+
+Rebuilt the visual system without removing product functions. Replaced acid-green terminal styling and dominant monospace typography with deep navy and graphite foundations, confidence blue for actions, restrained emerald for healthy states, modern humanist typography, softer depth, clearer casing, larger readable labels, and more approachable premium-fintech surfaces. Refined the GreenBrain brand treatment, navigation, market workspace, decision panel, risk controls, chat, and mobile navigation. Added a new 1200×630 premium social preview aligned with the redesign. The production build passed and the existing owner-only site was updated.
+
 ## 2026-08-23 to 2026-08-24 — Foundational discussion
 
 ### User
