@@ -8,7 +8,7 @@ This registry is the operational source of truth for product ideas, defects, req
 | GB-002 | Critical | Requirement | Verified | Keep deterministic risk authority separate from AI |
 | GB-003 | Critical | Defect | Verified | Reevaluate assisted decisions at confirmation time |
 | GB-004 | Critical | Requirement | In progress | Implement instrument-aware Forex position sizing |
-| GB-005 | Critical | Action | Planned | Add PostgreSQL transactional event persistence |
+| GB-005 | Critical | Action | In progress | Add PostgreSQL transactional event persistence |
 | GB-006 | Critical | Action | Planned | Implement complete MT5 reconciliation and restart recovery |
 | GB-007 | Critical | Action | Planned | Add authenticated cloud control plane and MFA |
 | GB-008 | Critical | Requirement | In progress | Complete end-to-end emergency-stop behavior |
@@ -43,6 +43,15 @@ This registry is the operational source of truth for product ideas, defects, req
 - Defines explicit demo-position handling.
 - Works during partial service degradation.
 
+### GB-005 — PostgreSQL persistence
+
+- Core schema migration is versioned and reversible.
+- Journal writes enforce unique event identities.
+- Multi-event writes are atomic.
+- Service restart can replay events in sequence.
+- Production adapter passes integration tests against PostgreSQL.
+- Backup, restore, retention, and migration procedures are verified.
+
 ### GB-013 — GreenBrain chat
 
 - Uses a server-side provider key only.
@@ -51,4 +60,3 @@ This registry is the operational source of truth for product ideas, defects, req
 - Requires explicit confirmation for operational commands.
 - Cannot place orders, disable risk, or claim an action completed without backend evidence.
 - Persists conversation and action audit history.
-
