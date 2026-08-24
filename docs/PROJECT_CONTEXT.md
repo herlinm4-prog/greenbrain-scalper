@@ -13,6 +13,10 @@ This file is the durable handoff for every future development session. It record
 - Initial execution environment: demo/paper accounts only
 - User-facing language: English unless explicitly changed
 
+## AI-native product definition
+
+GreenBrain Scalper is an artificial intelligence system specialized in short-horizon scalping, not merely an Expert Advisor, fixed-rule bot, signal dashboard, or MT5 remote control. Its intelligence layer must analyze context and microstructure, generate competing hypotheses, express calibrated uncertainty, abstain when evidence is insufficient, and improve through versioned evaluation of recorded experience. Deterministic risk and execution components remain separate and authoritative so that model output cannot bypass safety controls.
+
 ## Permanent operating principles
 
 - Build a multimarket and multibroker platform even though Forex is the first integration.
