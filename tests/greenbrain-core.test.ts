@@ -70,4 +70,20 @@ describe("GreenBrainCore", () => {
     expect(positions.openPositions()).toHaveLength(0);
     expect(await journal.events()).toHaveLength(1);
   });
+
+  it("re-evaluates current conditions before confirming an assisted decision", async () => {
+    const { core } = makeCore();
+    const assistedProposal = { ...request.proposal, id: "stale-assisted-signal" };
+    const initial = await core.processSignal({ ...request, automationMode: "assisted", proposal: assistedProposal });
+    expect(initial.executionStatus).toBe("awaiting-confirmation");
+
+    await expect(core.confirmAssisted({
+      tradingMode: "demo",
+      policy: request.policy,
+      account: request.account,
+      market: { ...request.market, bid: 1.1, ask: 1.102 },
+      proposal: assistedProposal,
+      timestampMs: 2_000,
+    })).rejects.toThrow("failed current checks");
+  });
 });
