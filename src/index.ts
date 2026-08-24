@@ -11,3 +11,6 @@ export * from "./position-ledger.js";
 export * from "./mt5-bridge.js";
 export * from "./trading-journal.js";
 export * from "./greenbrain-core.js";
+export * from "./strategy-attribution.js";
+export * from "./strategy-library.js";
+export * from "./pattern-discovery.js";
