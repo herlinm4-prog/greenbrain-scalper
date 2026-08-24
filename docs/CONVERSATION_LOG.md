@@ -117,3 +117,13 @@ Required the AI to preserve and improve functions or behaviors that generate pro
 ### Assistant and decision
 
 Accepted this as a core learning capability with controlled promotion. Profitable behavior is first stored as attributed evidence and a versioned strategy candidate, not immediately activated. Candidates must demonstrate sufficient sample size, positive expectancy after spread/slippage/latency, controlled drawdown, stability across regimes, replay and out-of-sample performance, and independent demo shadow performance. Only candidates passing promotion gates may become active strategies; previous versions remain available for rollback. Losses and rejected trades remain in memory to prevent survivorship bias.
+
+## 2026-08-24 — Luck-versus-skill attribution
+
+### User
+
+Required GreenBrain to analyze whether an observed advantage came from luck or from a repeatable strategy and establish the strategy when the evidence supports it.
+
+### Assistant and decision
+
+Added an explicit statistical attribution requirement. GreenBrain will estimate the probability that net expectancy is genuinely positive using minimum sample sizes, confidence or posterior distributions, bootstrap/permutation tests, walk-forward and untouched out-of-sample data, regime consistency, counterfactual comparison, execution-cost sensitivity, and correction for testing many strategy candidates. Strategy establishment requires evidence of repeatability rather than isolated profit.
