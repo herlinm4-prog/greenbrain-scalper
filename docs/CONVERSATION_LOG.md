@@ -87,3 +87,13 @@ Specified that the completed application must run continuously on internet infra
 ### Assistant and decision
 
 GreenBrain Scalper will be delivered as a responsive web application/PWA backed by continuously running cloud services. The target production topology separates the internet-facing application and data services from the Windows MT5 execution node. The MT5 node should be placed near the broker server because latency and connection stability matter more than raw compute for scalping. The iMac and phone are clients only; disconnecting them must not stop analysis, demo execution, logging, or safety controls.
+
+## 2026-08-24 — Backend-first autonomous build
+
+### User
+
+Directed Codex to advance as far as possible through the backend and infrastructure before beginning frontend implementation.
+
+### Assistant development outcome
+
+Implemented and pushed the typed MT5 demo adapter boundary, demo account and server allowlisting, heartbeat fail-closed behavior, order preflight contract, duplicate protection, position lifecycle, realized and unrealized P&L, append-only research journal abstraction, and the GreenBrain application service joining assisted/automatic decisions with controlled execution. The dashboard was not modified. Seventeen automated tests and strict TypeScript validation passed locally.
