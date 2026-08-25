@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 export type TradingStyle = "safe" | "balanced" | "aggressive";
+export type AutomationMode = "assisted" | "automatic";
 
 export interface GreenBrainSettings {
   riskPerTradeAmount: number;
@@ -9,6 +10,7 @@ export interface GreenBrainSettings {
   dailyLossLimit: number;
   streakAlertEnabled: boolean;
   automationRunning: boolean;
+  automationMode: AutomationMode;
 }
 
 export interface SettingsPatch {
@@ -18,9 +20,11 @@ export interface SettingsPatch {
   dailyLossLimit?: number;
   streakAlertEnabled?: boolean;
   automationRunning?: boolean;
+  automationMode?: AutomationMode;
 }
 
 export const TRADING_STYLES: TradingStyle[] = ["safe", "balanced", "aggressive"];
+export const AUTOMATION_MODES: AutomationMode[] = ["assisted", "automatic"];
 
 export const DEFAULT_SETTINGS: GreenBrainSettings = {
   riskPerTradeAmount: 25,
@@ -29,6 +33,7 @@ export const DEFAULT_SETTINGS: GreenBrainSettings = {
   dailyLossLimit: 50,
   streakAlertEnabled: true,
   automationRunning: true,
+  automationMode: "automatic",
 };
 
 export interface SettingsPersistence {
@@ -98,6 +103,9 @@ function sanitizePatch(input: unknown): SettingsPatch {
   if (typeof record.dailyLossLimit === "number") patch.dailyLossLimit = record.dailyLossLimit;
   if (typeof record.streakAlertEnabled === "boolean") patch.streakAlertEnabled = record.streakAlertEnabled;
   if (typeof record.automationRunning === "boolean") patch.automationRunning = record.automationRunning;
+  if (typeof record.automationMode === "string" && (AUTOMATION_MODES as string[]).includes(record.automationMode)) {
+    patch.automationMode = record.automationMode as AutomationMode;
+  }
   return patch;
 }
 
@@ -113,5 +121,8 @@ function validate(settings: GreenBrainSettings): void {
   }
   if (!(TRADING_STYLES as string[]).includes(settings.style)) {
     throw new Error("Unknown trading style");
+  }
+  if (!(AUTOMATION_MODES as string[]).includes(settings.automationMode)) {
+    throw new Error("Unknown automation mode");
   }
 }
