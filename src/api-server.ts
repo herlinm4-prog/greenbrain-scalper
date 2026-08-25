@@ -50,7 +50,11 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
 
   try {
     if (req.method === "GET" && url.pathname === "/api/state") {
-      sendJson(res, 200, { settings: service.getSettings(), telemetry: service.getTelemetry() });
+      sendJson(res, 200, {
+        settings: service.getSettings(),
+        telemetry: service.getTelemetry(),
+        assisted: service.getAssistedExecutionState(),
+      });
       return;
     }
 
@@ -62,6 +66,22 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
       } catch (error) {
         sendJson(res, 400, { error: message(error) });
       }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/assisted/confirm") {
+      try {
+        const assisted = service.confirmPendingDecision();
+        sendJson(res, 200, { ok: true, assisted });
+      } catch (error) {
+        sendJson(res, 409, { error: message(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/assisted/discard") {
+      const assisted = service.discardPendingDecision();
+      sendJson(res, 200, { ok: true, assisted });
       return;
     }
 
