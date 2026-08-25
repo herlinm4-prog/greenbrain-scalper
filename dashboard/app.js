@@ -1,13 +1,12 @@
 // GreenBrain dashboard client.
-// This file no longer simulates anything locally. Every number on screen
-// comes from GET /api/state on the GreenBrain service (src/run-service.ts).
-// Controls write back through the local GreenBrain API.
+// Every number on screen comes from GET /api/state on the GreenBrain service.
 
 const $ = (id) => document.getElementById(id);
 
 const params = new URLSearchParams(window.location.search);
 if (params.get("api")) localStorage.setItem("greenbrainApiBase", params.get("api"));
-const API_BASE = localStorage.getItem("greenbrainApiBase") || "http://127.0.0.1:8787";
+const savedApiBase = localStorage.getItem("greenbrainApiBase");
+const API_BASE = savedApiBase || (window.location.protocol.startsWith("http") ? window.location.origin : "http://127.0.0.1:8787");
 
 const POLL_MS = 1500;
 let lastTopHistoryKey = null;
@@ -37,7 +36,7 @@ function hideAlert() {
 }
 
 async function apiGet(path) {
-  const response = await fetch(`${API_BASE}${path}`);
+  const response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`GET ${path} failed: ${response.status}`);
   return response.json();
 }
@@ -54,12 +53,13 @@ async function apiPost(path, body) {
 }
 
 function setConnectionState(isConnected) {
-  if (isConnected === connected) return;
   connected = isConnected;
+  const connection = document.querySelector(".connection");
+  if (connection) connection.innerHTML = isConnected ? "<i></i>CONNECTED" : "<i></i>OFFLINE";
   if (!isConnected) {
     $("watchStatus").textContent = "GREENBRAIN SERVICE OFFLINE";
     $("decision").textContent = "OFFLINE";
-    $("reason").textContent = "Cannot reach the GreenBrain service. Start it, then reload this page.";
+    $("reason").textContent = `Cannot reach GreenBrain at ${API_BASE}.`;
     $("marketState").textContent = "OFFLINE";
     $("pendingApproval").classList.add("hidden");
   }
@@ -88,7 +88,6 @@ function renderPending(assisted, settings) {
     panel.classList.add("hidden");
     return;
   }
-
   const seconds = Math.max(0, Math.ceil((pending.expiresAtMs - Date.now()) / 1000));
   $("pendingTitle").textContent = `${pending.side.toUpperCase()} READY`;
   $("pendingText").textContent = `${pending.confidencePct}% confidence · risk $${pending.riskAmount.toFixed(2)} · confirm within ${seconds}s. GreenBrain will re-check a fresh matching opportunity before execution.`;
@@ -113,28 +112,19 @@ function renderMarketMemory(memory) {
   $("rangeMarker").style.left = `${Math.max(2, Math.min(98, memory.rangePositionPct))}%`;
   $("marketMemoryText").textContent = memory.text;
   $("advisorTrend").textContent = memory.trend;
-  $("advisorLocation").textContent =
-    memory.rangePositionPct > 80 ? "Near observed high" : memory.rangePositionPct < 20 ? "Near observed low" : "Inside historical range";
+  $("advisorLocation").textContent = memory.rangePositionPct > 80 ? "Near observed high" : memory.rangePositionPct < 20 ? "Near observed low" : "Inside historical range";
   $("advisorAction").textContent = memory.action;
   $("advisorText").textContent = memory.text;
 }
 
 function renderHistory(history) {
-  $("historyRows").innerHTML = history
-    .map(
-      (row) =>
-        `<div class="row"><span>${new Date(row.timeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><span>${row.side}</span><span>$${row.riskAmount.toFixed(2)}</span><span class="${row.result >= 0 ? "positive" : "negative"}">${money(row.result)}</span></div>`,
-    )
-    .join("");
+  $("historyRows").innerHTML = history.map((row) => `<div class="row"><span>${new Date(row.timeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><span>${row.side}</span><span>$${row.riskAmount.toFixed(2)}</span><span class="${row.result >= 0 ? "positive" : "negative"}">${money(row.result)}</span></div>`).join("");
   $("historySummary").textContent = history.length ? `${history.length} recent trades monitored` : "Monitoring every decision";
 }
 
 function renderLog(entries) {
   $("log").innerHTML = "";
-  entries
-    .slice(0, 8)
-    .reverse()
-    .forEach((entry) => log(entry));
+  entries.slice(0, 8).reverse().forEach((entry) => log(entry));
 }
 
 function systemStateClass(state) {
@@ -148,19 +138,13 @@ function renderAlerts(telemetry) {
   const topKey = topRow ? `${topRow.timeIso}:${topRow.result}` : null;
   if (topKey && topKey !== lastTopHistoryKey) {
     lastTopHistoryKey = topKey;
-    if (topRow.result >= 0) {
-      showAlert("PROFIT ALERT", `${topRow.side} closed ${money(topRow.result)}. GreenBrain recorded the result.`);
-    } else {
-      showAlert("RISK ALERT", `${topRow.side} closed ${money(topRow.result)}. Risk remains limited by your settings.`);
-    }
+    showAlert(topRow.result >= 0 ? "PROFIT ALERT" : "RISK ALERT", `${topRow.side} closed ${money(topRow.result)}. GreenBrain recorded the result.`);
     return;
   }
-
   if (telemetry.halted) {
     showAlert("EMERGENCY STOP", "Automation is frozen. No new trades can be initiated.");
     return;
   }
-
   const advice = telemetry.riskAdvice;
   if (advice && advice.requiresUserConfirmation) {
     if (advice.state === "review-increase") {
@@ -176,7 +160,6 @@ function renderAlerts(telemetry) {
     showAlert("DAILY LOSS LIMIT", advice.reason);
     return;
   }
-
   hideAlert();
 }
 
@@ -184,35 +167,23 @@ function render(state) {
   const { settings, telemetry, assisted } = state;
   renderSettings(settings);
   renderPending(assisted, settings);
-
   $("watchStatus").textContent = telemetry.halted ? "EMERGENCY STOP" : telemetry.running ? "WATCHING MARKETS" : "PAUSED";
   $("decision").textContent = telemetry.decision;
   $("confidence").textContent = `${telemetry.confidencePct}%`;
   $("reason").textContent = telemetry.reason;
   $("marketState").textContent = telemetry.decision === "BUY" || telemetry.decision === "SELL" ? "OPPORTUNITY" : "SCANNING";
-
   $("todayProfit").textContent = money(telemetry.today.profit);
   $("todayProfit").className = telemetry.today.profit > 0 ? "positive" : telemetry.today.profit < 0 ? "negative" : "";
-  $("winRate").textContent = telemetry.today.wins + telemetry.today.losses
-    ? `${telemetry.today.wins} wins - ${telemetry.today.winRatePct}% win rate`
-    : "No closed trades yet";
-
+  $("winRate").textContent = telemetry.today.wins + telemetry.today.losses ? `${telemetry.today.wins} wins - ${telemetry.today.winRatePct}% win rate` : "No closed trades yet";
   $("streak").textContent = telemetry.streak.winStreak ? `${telemetry.streak.winStreak} WINS` : "-";
-  $("streakText").textContent = telemetry.streak.winStreak >= 3
-    ? "Strong run detected"
-    : telemetry.streak.winStreak
-      ? "Positive sequence"
-      : "Waiting for results";
-
+  $("streakText").textContent = telemetry.streak.winStreak >= 3 ? "Strong run detected" : telemetry.streak.winStreak ? "Positive sequence" : "Waiting for results";
   const systemState = $("systemState");
   systemState.textContent = telemetry.systemState;
   systemState.className = systemStateClass(telemetry.systemState);
-
   renderMarketMemory(telemetry.marketMemory);
   renderHistory(telemetry.history);
   renderLog(telemetry.log);
   renderAlerts(telemetry);
-
   $("startStop").disabled = telemetry.halted;
   $("emergency").disabled = telemetry.halted;
 }
@@ -237,86 +208,24 @@ async function updateSettings(patch, description) {
   }
 }
 
-document.querySelectorAll("[data-risk]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const amount = Number(button.dataset.risk);
-    updateSettings({ riskPerTradeAmount: amount }, `Risk per trade changed to $${amount}`);
-  });
-});
-
-$("mode").addEventListener("change", () => {
-  updateSettings({ style: $("mode").value }, `Trading style changed to ${$("mode").value}`);
-});
-
+document.querySelectorAll("[data-risk]").forEach((button) => button.addEventListener("click", () => {
+  const amount = Number(button.dataset.risk);
+  updateSettings({ riskPerTradeAmount: amount }, `Risk per trade changed to $${amount}`);
+}));
+$("mode").addEventListener("change", () => updateSettings({ style: $("mode").value }, `Trading style changed to ${$("mode").value}`));
 $("automationMode").addEventListener("change", () => {
   const mode = $("automationMode").value;
-  updateSettings(
-    { automationMode: mode },
-    mode === "automatic"
-      ? "AUTO PILOT enabled - GreenBrain may execute qualified demo trades automatically"
-      : "Assisted mode enabled - trades require confirmation",
-  );
+  updateSettings({ automationMode: mode }, mode === "automatic" ? "AUTO PILOT enabled - GreenBrain may execute qualified demo trades automatically" : "Assisted mode enabled - trades require confirmation");
 });
+$("profitGoal").addEventListener("change", () => updateSettings({ dailyProfitGoal: Number($("profitGoal").value) || 1 }, "Daily profit goal updated"));
+$("lossLimit").addEventListener("change", () => updateSettings({ dailyLossLimit: Number($("lossLimit").value) || 1 }, "Daily loss limit updated"));
+$("streakBoost").addEventListener("change", () => updateSettings({ streakAlertEnabled: $("streakBoost").checked }));
+$("confirmTrade").addEventListener("click", async () => { try { await apiPost("/api/assisted/confirm"); log("Trade confirmed - GreenBrain will execute only if a fresh matching opportunity still passes every safety gate"); await refresh(); } catch (error) { log(`Confirmation rejected: ${error.message}`); await refresh(); } });
+$("discardTrade").addEventListener("click", async () => { try { await apiPost("/api/assisted/discard"); log("Pending trade discarded"); await refresh(); } catch (error) { log(`Could not discard pending trade: ${error.message}`); } });
+$("alertAction").addEventListener("click", () => document.querySelector(".controls")?.scrollIntoView({ behavior: "smooth" }));
+$("startStop").addEventListener("click", async () => { try { const state = await apiGet("/api/state"); await updateSettings({ automationRunning: !state.settings.automationRunning }, state.settings.automationRunning ? "Automation paused" : "Automation resumed"); } catch (error) { log("Could not toggle automation - service unreachable"); } });
+$("emergency").addEventListener("click", async () => { try { await apiPost("/api/emergency-stop"); log("EMERGENCY STOP ENGAGED"); await refresh(); } catch (error) { log("Could not reach the service to engage the emergency stop"); } });
 
-$("profitGoal").addEventListener("change", () => {
-  updateSettings({ dailyProfitGoal: Number($("profitGoal").value) || 1 }, "Daily profit goal updated");
-});
-
-$("lossLimit").addEventListener("change", () => {
-  updateSettings({ dailyLossLimit: Number($("lossLimit").value) || 1 }, "Daily loss limit updated");
-});
-
-$("streakBoost").addEventListener("change", () => {
-  updateSettings({ streakAlertEnabled: $("streakBoost").checked });
-});
-
-$("confirmTrade").addEventListener("click", async () => {
-  try {
-    await apiPost("/api/assisted/confirm");
-    log("Trade confirmed - GreenBrain will execute only if a fresh matching opportunity still passes every safety gate");
-    await refresh();
-  } catch (error) {
-    log(`Confirmation rejected: ${error.message}`);
-    await refresh();
-  }
-});
-
-$("discardTrade").addEventListener("click", async () => {
-  try {
-    await apiPost("/api/assisted/discard");
-    log("Pending trade discarded");
-    await refresh();
-  } catch (error) {
-    log(`Could not discard pending trade: ${error.message}`);
-  }
-});
-
-$("alertAction").addEventListener("click", () => {
-  document.querySelector(".control").scrollIntoView({ behavior: "smooth" });
-});
-
-$("startStop").addEventListener("click", async () => {
-  try {
-    const state = await apiGet("/api/state");
-    await updateSettings(
-      { automationRunning: !state.settings.automationRunning },
-      state.settings.automationRunning ? "Automation paused" : "Automation resumed",
-    );
-  } catch (error) {
-    log("Could not toggle automation - service unreachable");
-  }
-});
-
-$("emergency").addEventListener("click", async () => {
-  try {
-    await apiPost("/api/emergency-stop");
-    log("EMERGENCY STOP ENGAGED");
-    await refresh();
-  } catch (error) {
-    log("Could not reach the service to engage the emergency stop");
-  }
-});
-
-log("GreenBrain dashboard connecting to live service...");
+log(`GreenBrain dashboard connecting to ${API_BASE}...`);
 refresh();
 setInterval(refresh, POLL_MS);
