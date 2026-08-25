@@ -21,3 +21,4 @@ export * from "./forex-position-sizer.js";
 export * from "./postgres-journal-store.js";
 export * from "./experience-loop.js";
 export * from "./market-intelligence.js";
+export * from "./knowledge-base.js";
