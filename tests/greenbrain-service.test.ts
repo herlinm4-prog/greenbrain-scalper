@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GreenBrainService } from "../src/index.js";
+import type { BrokerAdapter, OrderReceipt, UniversalOrder } from "../src/index.js";
+import type { MarketSnapshot } from "../src/index.js";
 
 async function runTicks(service: GreenBrainService, count: number, startMs = Date.now()): Promise<void> {
   for (let i = 0; i < count; i += 1) {
@@ -11,7 +13,63 @@ async function runTicks(service: GreenBrainService, count: number, startMs = Dat
   }
 }
 
+class FakeBroker implements BrokerAdapter {
+  readonly environment = "demo" as const;
+  readonly id = "fake-live-broker";
+  snapshotCalls = 0;
+  heartbeatCalls = 0;
+  heartbeatShouldFail = false;
+
+  async refreshHeartbeat(_nowMs: number): Promise<void> {
+    this.heartbeatCalls += 1;
+    if (this.heartbeatShouldFail) throw new Error("heartbeat expired");
+  }
+
+  async getSnapshot(symbol: string, timestampMs: number): Promise<MarketSnapshot> {
+    this.snapshotCalls += 1;
+    return { symbol, bid: 1.1, ask: 1.1002, timestampMs, broker: this.id };
+  }
+
+  async submit(order: UniversalOrder): Promise<OrderReceipt> {
+    return { orderId: order.id, broker: this.id, status: "filled", filledPrice: order.requestedPrice, filledUnits: order.units, timestampMs: order.createdAtMs };
+  }
+
+  async cancel(orderId: string, timestampMs: number): Promise<OrderReceipt> {
+    return { orderId, broker: this.id, status: "cancelled", filledUnits: 0, timestampMs };
+  }
+}
+
 describe("GreenBrainService", () => {
+  it("defaults to the built-in paper broker when none is injected", async () => {
+    const service = await GreenBrainService.create({ seed: 20 });
+    expect(service.getTelemetry().broker.usingRealMt5).toBe(false);
+    expect(service.getTelemetry().broker.id).toBe("greenbrain-paper");
+  });
+
+  it("uses an injected broker adapter instead of the paper simulator", async () => {
+    const broker = new FakeBroker();
+    const service = await GreenBrainService.create({ broker });
+    expect(service.getTelemetry().broker.usingRealMt5).toBe(true);
+    expect(service.getTelemetry().broker.id).toBe("fake-live-broker");
+
+    await service.tick(Date.now());
+    expect(broker.snapshotCalls).toBe(1);
+    expect(broker.heartbeatCalls).toBe(1);
+    expect(service.getTelemetry().market?.symbol).toBe("EURUSD");
+  });
+
+  it("degrades to WAIT instead of crashing when the injected broker's heartbeat fails", async () => {
+    const broker = new FakeBroker();
+    broker.heartbeatShouldFail = true;
+    const service = await GreenBrainService.create({ broker });
+
+    await expect(service.tick(Date.now())).resolves.toBeUndefined();
+    const telemetry = service.getTelemetry();
+    expect(telemetry.decision).toBe("WAIT");
+    expect(telemetry.reason).toMatch(/heartbeat expired/);
+    expect(broker.snapshotCalls).toBe(0);
+  });
+
   it("starts with no market data and a WAIT decision", async () => {
     const service = await GreenBrainService.create({ seed: 1 });
     const telemetry = service.getTelemetry();

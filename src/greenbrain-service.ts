@@ -5,6 +5,7 @@ import { ExecutionLedger } from "./execution-ledger.js";
 import { PositionLedger, type Position } from "./position-ledger.js";
 import { PaperBroker } from "./paper-broker.js";
 import { ForexDemoFeed } from "./simulator.js";
+import type { BrokerAdapter } from "./broker.js";
 import { InMemoryJournalStore, TradingJournal } from "./trading-journal.js";
 import { MarketWatchdog, type FeedHealthReport } from "./market-watchdog.js";
 import { MarketIntelligence, type HistoricalBar, type HistoricalContext } from "./market-intelligence.js";
@@ -33,11 +34,18 @@ const MAX_RECENT_RESULTS = 20;
 export interface GreenBrainServiceConfig {
   settingsPersistence?: SettingsPersistence;
   seed?: number;
+  /**
+   * Optional real broker adapter (e.g. Mt5DemoAdapter wired to the Python
+   * bridge). When omitted, GreenBrainService falls back to its own
+   * paper/demo feed - this keeps every default path fully isolated from
+   * any live MT5 connection.
+   */
+  broker?: BrokerAdapter;
 }
 
 export class GreenBrainService {
-  private readonly feed: ForexDemoFeed;
-  private readonly broker: PaperBroker;
+  private readonly broker: BrokerAdapter;
+  private readonly usingInjectedBroker: boolean;
   private readonly journalStore = new InMemoryJournalStore();
   private readonly journal: TradingJournal;
   private readonly positionLedger = new PositionLedger();
@@ -77,21 +85,26 @@ export class GreenBrainService {
   private lastReason = "GreenBrain is building market memory.";
 
   private constructor(config: GreenBrainServiceConfig) {
-    this.feed = new ForexDemoFeed({
-      symbol: SYMBOL,
-      broker: "greenbrain-paper",
-      initialMid: 1.1,
-      spreadBps: 0.8,
-      volatilityBps: 1.4,
-      seed: config.seed ?? 91,
+    this.usingInjectedBroker = config.broker !== undefined;
+    this.broker = config.broker ?? new PaperBroker({
+      id: "greenbrain-paper",
+      slippageBps: 0.3,
+      feed: new ForexDemoFeed({
+        symbol: SYMBOL,
+        broker: "greenbrain-paper",
+        initialMid: 1.1,
+        spreadBps: 0.8,
+        volatilityBps: 1.4,
+        seed: config.seed ?? 91,
+      }),
     });
-    this.broker = new PaperBroker({ id: "greenbrain-paper", slippageBps: 0.3, feed: this.feed });
     this.journal = new TradingJournal(this.journalStore);
     this.execution = new ExecutionService(this.broker, this.executionLedger, this.positionLedger, this.journal);
     this.signalGenerator = new MomentumSignalGenerator({
       symbol: SYMBOL,
       lookback: 6,
-      stopDistanceBps: 12,
+      volatilityMultiplier: 2.2,
+      minStopDistanceBps: 4,
       rewardToRisk: 1.6,
     });
     this.seedKnowledgeBase();
@@ -101,6 +114,11 @@ export class GreenBrainService {
     const service = new GreenBrainService(config);
     service.settingsStore = await SettingsStore.create(config.settingsPersistence);
     service.applySettings(service.settingsStore.get());
+    service.appendLog(
+      service.usingInjectedBroker
+        ? `Connected to live broker adapter: ${service.broker.id}`
+        : "Running on the built-in paper/demo simulator (no MT5 connection configured)",
+    );
     return service;
   }
 
@@ -141,7 +159,25 @@ export class GreenBrainService {
     const settings = this.settingsStore.get();
     if (this.halted || !settings.automationRunning) return;
 
-    const snapshot = await this.broker.getSnapshot(SYMBOL, nowMs);
+    const heartbeatError = await this.refreshBrokerHeartbeat(nowMs);
+    if (heartbeatError) {
+      this.lastDecision = "WAIT";
+      this.lastConfidencePct = 0;
+      this.lastReason = heartbeatError;
+      this.appendLog(`Broker connectivity issue: ${heartbeatError}`);
+      return;
+    }
+
+    let snapshot: MarketSnapshot;
+    try {
+      snapshot = await this.broker.getSnapshot(SYMBOL, nowMs);
+    } catch (error) {
+      this.lastDecision = "WAIT";
+      this.lastConfidencePct = 0;
+      this.lastReason = `Market data unavailable: ${error instanceof Error ? error.message : "unknown error"}`;
+      this.appendLog(this.lastReason);
+      return;
+    }
     this.lastMarket = snapshot;
     this.tickCount += 1;
 
@@ -258,6 +294,7 @@ export class GreenBrainService {
       running: settings.automationRunning && !this.halted,
       halted: this.halted,
       systemState,
+      broker: { id: this.broker.id, usingRealMt5: this.usingInjectedBroker },
       feedHealth,
       market: this.lastMarket
         ? {
@@ -294,6 +331,17 @@ export class GreenBrainService {
       history: [...this.history],
       log: [...this.log],
     };
+  }
+
+  private async refreshBrokerHeartbeat(nowMs: number): Promise<string | undefined> {
+    const maybeHeartbeat = this.broker as Partial<{ refreshHeartbeat(nowMs: number): Promise<void> }>;
+    if (typeof maybeHeartbeat.refreshHeartbeat !== "function") return undefined;
+    try {
+      await maybeHeartbeat.refreshHeartbeat(nowMs);
+      return undefined;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Broker heartbeat check failed";
+    }
   }
 
   private applySettings(settings: GreenBrainSettings): void {
@@ -404,11 +452,13 @@ export class GreenBrainService {
   }
 
   private seedKnowledgeBase(): void {
+    const retrievedAtMs = Date.now();
+
     this.knowledgeBase.addSource({
       id: "internal-risk-playbook",
       type: "internal",
       title: "GreenBrain deterministic risk playbook",
-      retrievedAtMs: Date.now(),
+      retrievedAtMs,
       credibility: 0.95,
     });
     this.knowledgeBase.addItem({
@@ -418,8 +468,102 @@ export class GreenBrainService {
         "Winning streaks are a review trigger, not automatic permission to raise risk; the customer must confirm any increase.",
       tags: ["risk", "streak"],
       marketSymbols: [],
-      createdAtMs: Date.now(),
+      createdAtMs: retrievedAtMs,
       confidence: 0.9,
+      executionRelevant: false,
+    });
+
+    // Researched sources below (web_search, current at seeding time). Summaries
+    // are paraphrased, not quoted, and kept short per copyright constraints.
+    // These inform engineering decisions in this codebase (e.g. the
+    // volatility-adjusted stop distance in signal-generator.ts) - they are
+    // context for GreenBrain's reasoning, never a direct trigger for orders.
+    this.knowledgeBase.addSource({
+      id: "web-volatility-position-sizing",
+      type: "web",
+      title: "Volatility-based position sizing using ATR",
+      url: "https://www.quantifiedstrategies.com/volatility-based-position-sizing/",
+      retrievedAtMs,
+      credibility: 0.7,
+    });
+    this.knowledgeBase.addItem({
+      id: "note-atr-sizing",
+      sourceId: "web-volatility-position-sizing",
+      summary:
+        "Sizing positions from a volatility measure (ATR or realized-return standard deviation) instead of a fixed distance keeps dollar risk consistent " +
+        "across calm and choppy conditions: the stop widens automatically when the market gets noisier and tightens when it calms down. GreenBrain's " +
+        "signal generator implements this directly (volatility-adjusted stop distance with a floor).",
+      tags: ["risk", "position-sizing", "volatility", "atr"],
+      marketSymbols: [],
+      createdAtMs: retrievedAtMs,
+      confidence: 0.75,
+      executionRelevant: true,
+    });
+
+    this.knowledgeBase.addSource({
+      id: "web-portfolio-heat",
+      type: "web",
+      title: "Portfolio heat limits and dynamic exposure",
+      url: "https://blog.traderspost.io/article/position-sizing-algorithms",
+      retrievedAtMs,
+      credibility: 0.65,
+    });
+    this.knowledgeBase.addItem({
+      id: "note-portfolio-heat",
+      sourceId: "web-portfolio-heat",
+      summary:
+        "A portfolio heat limit caps total risk across all open positions as a fraction of equity, and can tighten automatically during high-volatility " +
+        "periods. GreenBrain's single-open-position rule is a conservative version of this idea; a natural next step once multi-position support exists " +
+        "is a dynamic heat cap tied to the same volatility measure used for stop sizing.",
+      tags: ["risk", "portfolio-heat", "volatility"],
+      marketSymbols: [],
+      createdAtMs: retrievedAtMs,
+      confidence: 0.6,
+      executionRelevant: false,
+    });
+
+    this.knowledgeBase.addSource({
+      id: "web-regime-detection",
+      type: "research",
+      title: "Market regime detection with statistical and ML methods",
+      url: "https://questdb.com/glossary/market-regime-change-detection-with-ml/",
+      retrievedAtMs,
+      credibility: 0.65,
+    });
+    this.knowledgeBase.addItem({
+      id: "note-regime-detection",
+      sourceId: "web-regime-detection",
+      summary:
+        "Regime detection treats trending, ranging, and high/low-volatility conditions as distinct hidden states that a market moves between, commonly " +
+        "estimated with Hidden Markov Models or clustering over volatility and trend features. GreenBrain's MarketIntelligence already classifies trend " +
+        "and volatility from historical bars; a Hidden-Markov-style regime layer on top is the logical next step, not yet implemented.",
+      tags: ["regime-detection", "market-intelligence", "research"],
+      marketSymbols: [],
+      createdAtMs: retrievedAtMs,
+      confidence: 0.6,
+      executionRelevant: false,
+    });
+
+    this.knowledgeBase.addSource({
+      id: "web-strategy-diversification",
+      type: "web",
+      title: "Trend-following vs mean-reversion strategy selection by regime",
+      url: "https://blog.trader-algoritmico.com/what-is-algorithmic-trading-2026-guide-for-traders/",
+      retrievedAtMs,
+      credibility: 0.55,
+    });
+    this.knowledgeBase.addItem({
+      id: "note-strategy-by-regime",
+      sourceId: "web-strategy-diversification",
+      summary:
+        "Trend-following approaches tend to perform best in sustained directional moves, while mean-reversion approaches tend to perform best in " +
+        "range-bound, choppy conditions; professional desks often run both and allocate capital by current volatility regime rather than picking one " +
+        "style permanently. GreenBrain currently runs a single momentum strategy; adding a range/mean-reversion strategy selected by MarketIntelligence's " +
+        "trend classification is a concrete way to trade both bullish and bearish/ranging conditions rather than only momentum breakouts.",
+      tags: ["strategy", "regime-detection", "diversification"],
+      marketSymbols: [],
+      createdAtMs: retrievedAtMs,
+      confidence: 0.55,
       executionRelevant: false,
     });
   }

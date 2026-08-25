@@ -16,6 +16,7 @@ export interface GreenBrainTelemetry {
   running: boolean;
   halted: boolean;
   systemState: GreenBrainSystemState;
+  broker: { id: string; usingRealMt5: boolean };
   feedHealth: FeedHealthReport;
   market: { symbol: string; bid: number; ask: number; mid: number } | undefined;
   decision: GreenBrainDecisionLabel;
