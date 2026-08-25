@@ -31,6 +31,8 @@ export interface RiskPolicy {
   maxDailyLossFraction: number;
   maxOpenPositions: number;
   maxSpreadBps: number;
+  maxRiskAmount?: number;
+  maxDailyLossAmount?: number;
 }
 
 export interface RiskDecision {
