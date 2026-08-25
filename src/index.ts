@@ -24,3 +24,4 @@ export * from "./market-intelligence.js";
 export * from "./knowledge-base.js";
 export * from "./risk-advisor.js";
 export * from "./market-watchdog.js";
+export * from "./session-protection.js";
