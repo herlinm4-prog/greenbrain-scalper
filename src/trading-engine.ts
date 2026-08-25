@@ -8,6 +8,7 @@ import type {
   SignalProposal,
   TradingMode,
 } from "./domain.js";
+import type { HistoricalContext } from "./market-intelligence.js";
 import { RiskEngine } from "./risk-engine.js";
 import { ShadowMarket } from "./shadow-market.js";
 
@@ -37,6 +38,7 @@ export class TradingEngine {
     account: AccountState,
     market: MarketSnapshot,
     proposal: SignalProposal,
+    historicalContext?: HistoricalContext,
   ): EngineDecision {
     if (proposal.symbol !== market.symbol) {
       return this.reject("Signal symbol does not match market snapshot");
@@ -44,6 +46,21 @@ export class TradingEngine {
 
     if (proposal.confidence < this.config.minimumConfidence) {
       return this.reject("Signal confidence is below the operating threshold");
+    }
+
+    if (historicalContext) {
+      if (historicalContext.posture === "avoid") {
+        return this.reject("Historical market context says to avoid new exposure");
+      }
+      if (historicalContext.posture === "favor-long" && proposal.side === "sell") {
+        return this.reject("Sell signal conflicts with the current historical trend context");
+      }
+      if (historicalContext.posture === "favor-short" && proposal.side === "buy") {
+        return this.reject("Buy signal conflicts with the current historical trend context");
+      }
+      if (historicalContext.confidence < 0.35) {
+        return this.reject("Historical context is too uncertain to support execution");
+      }
     }
 
     const risk = this.riskEngine.evaluate(mode, policy, account, market, proposal);
@@ -65,7 +82,9 @@ export class TradingEngine {
 
     return {
       status: "approved",
-      reason: "Signal passed confidence, risk, and shadow-market checks",
+      reason: historicalContext
+        ? "Signal passed confidence, historical context, risk, and shadow-market checks"
+        : "Signal passed confidence, risk, and shadow-market checks",
       risk,
       shadowResults,
     };
