@@ -35,7 +35,11 @@ export class RiskEngine {
       return this.reject("Maximum open positions reached");
     }
 
-    const dailyLossLimit = account.equity * policy.maxDailyLossFraction;
+    const fractionDailyLossLimit = account.equity * policy.maxDailyLossFraction;
+    const dailyLossLimit = policy.maxDailyLossAmount !== undefined
+      ? Math.min(fractionDailyLossLimit, policy.maxDailyLossAmount)
+      : fractionDailyLossLimit;
+    if (dailyLossLimit <= 0) return this.reject("Daily loss limit must be positive");
     if (account.dailyPnl <= -dailyLossLimit) {
       return this.reject("Daily loss limit reached");
     }
@@ -47,7 +51,12 @@ export class RiskEngine {
     const stopDistance = Math.abs(proposal.entry - proposal.stopLoss);
     if (stopDistance <= 0) return this.reject("Stop loss must differ from entry");
 
-    const riskAmount = account.equity * policy.maxRiskFraction;
+    const fractionRiskAmount = account.equity * policy.maxRiskFraction;
+    const riskAmount = policy.maxRiskAmount !== undefined
+      ? Math.min(fractionRiskAmount, policy.maxRiskAmount)
+      : fractionRiskAmount;
+    if (riskAmount <= 0) return this.reject("Risk amount must be positive");
+
     const units = Math.floor(riskAmount / stopDistance);
     if (units < 1) return this.reject("Calculated position is below one unit");
 
