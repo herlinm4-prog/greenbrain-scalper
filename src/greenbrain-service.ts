@@ -15,6 +15,13 @@ import { ExperienceLoop } from "./experience-loop.js";
 import { GreenBrainKnowledgeBase, type KnowledgeItem, type KnowledgeSource, type KnowledgeBrief } from "./knowledge-base.js";
 import { MomentumSignalGenerator } from "./signal-generator.js";
 import { riskPolicyFor, engineConfigFor } from "./style-policy.js";
+import type {
+  Mt5PushAllowlist,
+  Mt5PushCloseReport,
+  Mt5PushDecision,
+  Mt5PushFillReport,
+  Mt5PushSnapshot,
+} from "./mt5-push.js";
 import {
   SettingsStore,
   type GreenBrainSettings,
@@ -30,6 +37,13 @@ const MAX_BARS = 60;
 const MAX_HISTORY_ROWS = 20;
 const MAX_LOG_LINES = 30;
 const MAX_RECENT_RESULTS = 20;
+/**
+ * Standard forex contract size. Correct for EURUSD with a USD account
+ * currency, which is what this codebase hardcodes today - documented here
+ * because it's the one simplification that would need revisiting before
+ * supporting other symbols or account currencies.
+ */
+const UNITS_PER_LOT = 100_000;
 
 export interface GreenBrainServiceConfig {
   settingsPersistence?: SettingsPersistence;
@@ -41,6 +55,15 @@ export interface GreenBrainServiceConfig {
    * any live MT5 connection.
    */
   broker?: BrokerAdapter;
+  /**
+   * Enables the MQL5 "push" integration (evaluateExternalTick / reportFill /
+   * reportClose): an Expert Advisor running inside a real MT5 terminal
+   * pushes ticks and account state over HTTP instead of GreenBrain pulling
+   * from a Python bridge. When set, only requests whose accountLogin and
+   * accountServer match exactly are accepted - everything else is rejected,
+   * mirroring the same allowlist Mt5DemoAdapter already enforces.
+   */
+  mt5PushAllowlist?: Mt5PushAllowlist;
 }
 
 export class GreenBrainService {
@@ -84,7 +107,15 @@ export class GreenBrainService {
   private lastConfidencePct = 0;
   private lastReason = "GreenBrain is building market memory.";
 
+  private readonly mt5PushAllowlist: Mt5PushAllowlist | undefined;
+  private mt5PushDecisionCount = 0;
+  private readonly openMt5PositionsByTicket = new Map<
+    number,
+    { symbol: string; side: "buy" | "sell"; entryPrice: number; stopLoss: number; takeProfit: number; volumeLots: number; openedAtMs: number }
+  >();
+
   private constructor(config: GreenBrainServiceConfig) {
+    this.mt5PushAllowlist = config.mt5PushAllowlist;
     this.usingInjectedBroker = config.broker !== undefined;
     this.broker = config.broker ?? new PaperBroker({
       id: "greenbrain-paper",
@@ -119,6 +150,11 @@ export class GreenBrainService {
         ? `Connected to live broker adapter: ${service.broker.id}`
         : "Running on the built-in paper/demo simulator (no MT5 connection configured)",
     );
+    if (service.mt5PushAllowlist) {
+      service.appendLog(
+        `MT5 push mode enabled - waiting for the Expert Advisor to report account ${service.mt5PushAllowlist.login}@${service.mt5PushAllowlist.server}`,
+      );
+    }
     return service;
   }
 
@@ -139,6 +175,222 @@ export class GreenBrainService {
     this.lastDecision = "HALTED";
     this.lastReason = "Emergency stop engaged. No new automated decisions will be made.";
     this.appendLog("EMERGENCY STOP ENGAGED");
+  }
+
+  /**
+   * MQL5 push-mode entry point. An Expert Advisor running inside a real MT5
+   * terminal calls this on every evaluation tick instead of GreenBrain
+   * pulling data through a Python bridge. Runs the exact same intelligence
+   * pipeline as tick() (bars -> MarketIntelligence -> signal generator ->
+   * TradingEngine/RiskEngine -> SessionProtection) but never places an
+   * order itself: it returns a decision for the EA to execute locally with
+   * MT5's own lot sizing, and updates telemetry from the account state the
+   * EA reports (so equity/dailyPnl reflect the real account, not a
+   * synthetic balance).
+   */
+  async evaluateExternalTick(input: Mt5PushSnapshot): Promise<Mt5PushDecision> {
+    this.assertPushModeEnabled();
+    this.assertAllowlisted(input.accountLogin, input.accountServer);
+    if (input.accountTradeMode !== "demo") {
+      throw new Error("Non-demo MT5 account rejected");
+    }
+    if (input.symbol !== SYMBOL) {
+      throw new Error(`Unsupported symbol: ${input.symbol} (GreenBrain currently only trades ${SYMBOL})`);
+    }
+    if (input.bid <= 0 || input.ask <= input.bid) {
+      throw new Error("Invalid bid/ask from MT5");
+    }
+
+    const settings = this.settingsStore.get();
+    const decisionId = `mt5-push-${++this.mt5PushDecisionCount}-${input.timestampMs}`;
+    const nowMs = input.timestampMs;
+    const snapshot: MarketSnapshot = {
+      symbol: input.symbol,
+      bid: input.bid,
+      ask: input.ask,
+      timestampMs: input.timestampMs,
+      broker: "mt5-live",
+    };
+
+    this.lastMarket = snapshot;
+    this.account = { equity: input.equity, dailyPnl: this.account.dailyPnl, openPositions: input.openPositions };
+    this.tickCount += 1;
+
+    if (this.halted || !settings.automationRunning) {
+      return this.pushWait(decisionId, this.halted ? "Emergency stop is engaged" : "Automation is paused");
+    }
+
+    const feedHealth = this.watchdog.evaluate(input.timestampMs, nowMs);
+    this.accumulateBar(snapshot);
+    this.signalGenerator.observe(snapshot);
+    if (this.bars.length >= 8) {
+      this.historicalContext = this.marketIntelligence.analyze(this.bars);
+    }
+    this.lastSessionProtection = this.sessionProtection.evaluate(this.account.dailyPnl);
+
+    if (!feedHealth.canTrade) return this.pushWait(decisionId, feedHealth.reason);
+
+    const proposal = this.signalGenerator.propose(snapshot, this.tickCount);
+    if (!proposal) {
+      return this.pushWait(
+        decisionId,
+        this.historicalContext
+          ? this.marketIntelligence.explain(this.historicalContext)
+          : "Building short-term momentum context before proposing a trade.",
+      );
+    }
+    this.lastConfidencePct = Math.round(proposal.confidence * 100);
+
+    if (input.openPositions >= 1) {
+      return this.pushWait(decisionId, "GreenBrain is managing an open position and will not stack new exposure.");
+    }
+    if (this.lastSessionProtection.pauseNewTrades) {
+      return this.pushWait(decisionId, this.lastSessionProtection.reason);
+    }
+
+    const policy = riskPolicyFor(settings);
+    const decision = this.engine.evaluate(
+      "demo",
+      policy,
+      this.account,
+      snapshot,
+      proposal,
+      this.historicalContext,
+    );
+    void this.journal.recordDecision(proposal, decision, nowMs);
+
+    if (decision.status !== "approved") {
+      this.experience.recordRejection({
+        id: `reject-${proposal.id}`,
+        opportunityId: proposal.id,
+        strategyId: this.strategyId,
+        symbol: proposal.symbol,
+        regime: this.historicalContext?.trend ?? "unknown",
+        rejectedAtMs: nowMs,
+        reason: decision.reason,
+        outOfSample: false,
+      });
+      return this.pushWait(decisionId, decision.reason);
+    }
+
+    this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
+    this.lastReason = decision.reason;
+    this.appendLog(
+      `${this.lastDecision} approved for MT5 - confidence ${this.lastConfidencePct}% - risk $${decision.risk.riskAmount.toFixed(2)} (decision ${decisionId})`,
+    );
+
+    return {
+      decisionId,
+      action: proposal.side,
+      reason: decision.reason,
+      confidencePct: this.lastConfidencePct,
+      entry: proposal.entry,
+      stopLoss: proposal.stopLoss,
+      takeProfit: proposal.takeProfit,
+      riskAmount: decision.risk.riskAmount,
+    };
+  }
+
+  /** The EA calls this right after trying to place the order MT5-side. */
+  reportFill(report: Mt5PushFillReport): void {
+    this.assertPushModeEnabled();
+    if (report.status === "rejected") {
+      this.appendLog(`MT5 rejected order for decision ${report.decisionId}: ${report.reason ?? "no reason given"}`);
+      return;
+    }
+    if (
+      report.ticket === undefined ||
+      report.entryPrice === undefined ||
+      report.stopLoss === undefined ||
+      report.takeProfit === undefined ||
+      report.volumeLots === undefined
+    ) {
+      throw new Error("A filled report requires ticket, entryPrice, stopLoss, takeProfit, and volumeLots");
+    }
+    this.openMt5PositionsByTicket.set(report.ticket, {
+      symbol: report.symbol,
+      side: report.side,
+      entryPrice: report.entryPrice,
+      stopLoss: report.stopLoss,
+      takeProfit: report.takeProfit,
+      volumeLots: report.volumeLots,
+      openedAtMs: report.timestampMs,
+    });
+    this.account.openPositions += 1;
+    this.appendLog(
+      `${report.side.toUpperCase()} filled on MT5 - ticket ${report.ticket} - ${report.volumeLots} lots @ ${report.entryPrice} (decision ${report.decisionId})`,
+    );
+  }
+
+  /** The EA calls this once MT5 closes a position (stop, target, or manual close). */
+  reportClose(report: Mt5PushCloseReport): void {
+    this.assertPushModeEnabled();
+    const opened = this.openMt5PositionsByTicket.get(report.ticket);
+    this.openMt5PositionsByTicket.delete(report.ticket);
+    this.account.openPositions = Math.max(0, this.account.openPositions - 1);
+    this.account.dailyPnl += report.realizedPnl;
+
+    const position: Position = opened
+      ? {
+          id: `mt5-${report.ticket}`,
+          orderId: `mt5-${report.ticket}`,
+          symbol: opened.symbol,
+          side: opened.side,
+          units: opened.volumeLots * UNITS_PER_LOT,
+          entryPrice: opened.entryPrice,
+          currentPrice: report.exitPrice,
+          stopLoss: opened.stopLoss,
+          takeProfit: opened.takeProfit,
+          openedAtMs: opened.openedAtMs,
+          closedAtMs: report.closedAtMs,
+          exitPrice: report.exitPrice,
+          status: "closed",
+          unrealizedPnl: 0,
+          realizedPnl: report.realizedPnl,
+        }
+      : {
+          // We lost track of this ticket (e.g. service restarted). Still
+          // record the outcome so P/L and streaks stay accurate, with a
+          // clearly-flagged unknown risk amount rather than guessing one.
+          id: `mt5-${report.ticket}`,
+          orderId: `mt5-${report.ticket}`,
+          symbol: SYMBOL,
+          side: "buy", // arbitrary: side is unknown once we've lost the ticket, and units=0 makes it inert
+          units: 0,
+          entryPrice: report.exitPrice,
+          currentPrice: report.exitPrice,
+          stopLoss: report.exitPrice,
+          takeProfit: report.exitPrice,
+          openedAtMs: report.closedAtMs,
+          closedAtMs: report.closedAtMs,
+          exitPrice: report.exitPrice,
+          status: "closed",
+          unrealizedPnl: 0,
+          realizedPnl: report.realizedPnl,
+        };
+    if (!opened) {
+      this.appendLog(`Closed ticket ${report.ticket} with no matching open record (service may have restarted)`);
+    }
+    this.recordOutcome(position, report.closedAtMs);
+  }
+
+  private pushWait(decisionId: string, reason: string): Mt5PushDecision {
+    this.lastDecision = "WAIT";
+    this.lastReason = reason;
+    return { decisionId, action: "wait", reason, confidencePct: this.lastConfidencePct };
+  }
+
+  private assertPushModeEnabled(): void {
+    if (!this.mt5PushAllowlist) {
+      throw new Error("MT5 push mode is not configured on this service (mt5PushAllowlist missing)");
+    }
+  }
+
+  private assertAllowlisted(login: number, server: string): void {
+    const allowlist = this.mt5PushAllowlist!;
+    if (login !== allowlist.login || server !== allowlist.server) {
+      throw new Error("MT5 account is not allowlisted for this GreenBrain instance");
+    }
   }
 
   addKnowledge(source: KnowledgeSource, item: KnowledgeItem): void {
@@ -294,7 +546,7 @@ export class GreenBrainService {
       running: settings.automationRunning && !this.halted,
       halted: this.halted,
       systemState,
-      broker: { id: this.broker.id, usingRealMt5: this.usingInjectedBroker },
+      broker: { id: this.broker.id, usingRealMt5: this.usingInjectedBroker, pushModeEnabled: this.mt5PushAllowlist !== undefined },
       feedHealth,
       market: this.lastMarket
         ? {
@@ -413,26 +665,36 @@ export class GreenBrainService {
     );
 
     const riskAmount = Math.max(0.01, Math.abs(position.entryPrice - position.stopLoss) * position.units);
-    this.experience.recordExecution({
-      id: `exec-${position.id}-${position.closedAtMs}`,
-      opportunityId: position.orderId,
-      strategyId: this.strategyId,
-      symbol: position.symbol,
-      regime: this.historicalContext?.trend ?? "unknown",
-      side: position.side,
-      entryPrice: position.entryPrice,
-      exitPrice: position.exitPrice!,
-      units: position.units,
-      initialRiskAmount: riskAmount,
-      spreadCost: 0,
-      commission: 0,
-      slippageCost: 0,
-      maximumFavorablePnl: Math.max(0, position.realizedPnl),
-      maximumAdversePnl: Math.min(0, position.realizedPnl),
-      openedAtMs: position.openedAtMs,
-      closedAtMs: position.closedAtMs!,
-      outOfSample: false,
-    });
+    try {
+      this.experience.recordExecution({
+        id: `exec-${position.id}-${position.closedAtMs}`,
+        opportunityId: position.orderId,
+        strategyId: this.strategyId,
+        symbol: position.symbol,
+        regime: this.historicalContext?.trend ?? "unknown",
+        side: position.side,
+        entryPrice: position.entryPrice,
+        exitPrice: position.exitPrice!,
+        units: position.units,
+        initialRiskAmount: riskAmount,
+        spreadCost: 0,
+        commission: 0,
+        slippageCost: 0,
+        maximumFavorablePnl: Math.max(0, position.realizedPnl),
+        maximumAdversePnl: Math.min(0, position.realizedPnl),
+        openedAtMs: position.openedAtMs,
+        closedAtMs: position.closedAtMs!,
+        outOfSample: false,
+      });
+    } catch (error) {
+      // ExperienceLoop is memory/analytics, not the authoritative P/L record.
+      // A degenerate input (e.g. a close report with no matching open
+      // record, so units/prices are placeholders) should never block the
+      // real dailyPnl/history/streak update above from taking effect.
+      this.appendLog(
+        `Experience loop could not record this outcome: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
 
     void this.journal.recordPosition(position, nowMs);
   }

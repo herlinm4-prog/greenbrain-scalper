@@ -5,6 +5,7 @@ import { JsonFileSettingsPersistence } from "./settings-store.js";
 import { Mt5DemoAdapter } from "./mt5-bridge.js";
 import { Mt5HttpTransport } from "./mt5-http-transport.js";
 import type { BrokerAdapter } from "./broker.js";
+import type { Mt5PushAllowlist } from "./mt5-push.js";
 
 const TICK_INTERVAL_MS = 1_200;
 const PORT = Number(process.env.GREENBRAIN_API_PORT ?? 8787);
@@ -16,11 +17,13 @@ const PORT = Number(process.env.GREENBRAIN_API_PORT ?? 8787);
  * both sides. Returns undefined (falling back to the safe paper/demo
  * simulator) when GREENBRAIN_BROKER is unset or "paper".
  *
- * This never enables live-money trading: Mt5DemoAdapter.initialize()
- * hard-rejects any account whose trade_mode is not "demo", and rejects
- * any login/server that doesn't match the allowlist below.
+ * This requires a real Windows machine or VPS running bridge/mt5_bridge.py
+ * (the MetaTrader5 Python package is Windows-only). It never enables
+ * live-money trading: Mt5DemoAdapter.initialize() hard-rejects any account
+ * whose trade_mode is not "demo", and rejects any login/server that
+ * doesn't match the allowlist below.
  */
-async function buildMt5Broker(): Promise<BrokerAdapter | undefined> {
+async function buildMt5PullBroker(): Promise<BrokerAdapter | undefined> {
   const mode = process.env.GREENBRAIN_BROKER ?? "paper";
   if (mode !== "mt5") return undefined;
 
@@ -37,9 +40,6 @@ async function buildMt5Broker(): Promise<BrokerAdapter | undefined> {
     transport,
   );
 
-  // initialize() connects, fetches account info, and throws if the account
-  // is not a demo account or is not on the allowlist. We want that failure
-  // to stop the whole service from starting, not fall back silently.
   const account = await adapter.initialize();
   // eslint-disable-next-line no-console
   console.log(
@@ -47,6 +47,22 @@ async function buildMt5Broker(): Promise<BrokerAdapter | undefined> {
       `(${account.broker}, equity ${account.equity} ${account.currency})`,
   );
   return adapter;
+}
+
+/**
+ * Enables the MQL5 push integration when GREENBRAIN_MT5_PUSH_LOGIN and
+ * GREENBRAIN_MT5_PUSH_SERVER are both set. This is the Mac-friendly path:
+ * an Expert Advisor running inside the real MT5 terminal (even a
+ * Mac-wrapped one, since the terminal itself is genuine MT5) calls
+ * POST /api/mt5/evaluate, /report-fill, /report-close directly - no
+ * Windows and no Python bridge required. When this is active, the internal
+ * tick loop below is skipped: the EA's HTTP calls drive the service instead.
+ */
+function buildMt5PushAllowlist(): Mt5PushAllowlist | undefined {
+  const login = process.env.GREENBRAIN_MT5_PUSH_LOGIN;
+  const server = process.env.GREENBRAIN_MT5_PUSH_SERVER;
+  if (!login || !server) return undefined;
+  return { login: Number(login), server };
 }
 
 function requireEnv(name: string): string {
@@ -61,17 +77,31 @@ function requireEnv(name: string): string {
 
 async function main(): Promise<void> {
   const settingsPath = path.join(process.cwd(), "greenbrain-settings.json");
-  const broker = await buildMt5Broker();
+  const broker = await buildMt5PullBroker();
+  const mt5PushAllowlist = buildMt5PushAllowlist();
+
+  if (broker && mt5PushAllowlist) {
+    throw new Error(
+      "Configure either GREENBRAIN_BROKER=mt5 (Windows bridge) or GREENBRAIN_MT5_PUSH_LOGIN/SERVER (MQL5 EA), not both.",
+    );
+  }
 
   const service = await GreenBrainService.create({
     settingsPersistence: new JsonFileSettingsPersistence(settingsPath),
     ...(broker ? { broker } : {}),
+    ...(mt5PushAllowlist ? { mt5PushAllowlist } : {}),
   });
 
   const api = createApiServer(service, { port: PORT });
   await api.listen();
   // eslint-disable-next-line no-console
   console.log(`GreenBrain API listening on http://127.0.0.1:${PORT}`);
+
+  if (mt5PushAllowlist) {
+    // eslint-disable-next-line no-console
+    console.log("MT5 push mode active: waiting for the Expert Advisor to call /api/mt5/evaluate. Internal tick loop disabled.");
+    return;
+  }
 
   setInterval(() => {
     void service.tick(Date.now());

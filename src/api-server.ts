@@ -71,6 +71,39 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/mt5/evaluate") {
+      const body = (await readJson(req)) as Parameters<GreenBrainService["evaluateExternalTick"]>[0];
+      try {
+        const decision = await service.evaluateExternalTick(body);
+        sendJson(res, 200, decision);
+      } catch (error) {
+        sendJson(res, 400, { error: message(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/mt5/report-fill") {
+      const body = (await readJson(req)) as Parameters<GreenBrainService["reportFill"]>[0];
+      try {
+        service.reportFill(body);
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 400, { error: message(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/mt5/report-close") {
+      const body = (await readJson(req)) as Parameters<GreenBrainService["reportClose"]>[0];
+      try {
+        service.reportClose(body);
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 400, { error: message(error) });
+      }
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/knowledge") {
       const symbol = url.searchParams.get("symbol") ?? undefined;
       sendJson(res, 200, service.getKnowledgeBrief(symbol));
