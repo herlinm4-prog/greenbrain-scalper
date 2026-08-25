@@ -77,7 +77,10 @@ describe("GreenBrainService MT5 push mode", () => {
 
   it("Auto Pilot returns a qualified fresh trade to the MT5 EA without manual confirmation", async () => {
     const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
-    await service.updateSettings({ automationMode: "automatic" });
+    // Aggressive still keeps every deterministic risk gate; its configured
+    // 50% shadow-survival threshold makes this synthetic two-scenario fixture
+    // deterministic instead of depending on a stronger real-market move.
+    await service.updateSettings({ automationMode: "automatic", style: "aggressive" });
     const decision = await buildUptrend(service, 10_000);
     expect(decision.action).toBe("buy");
     expect(decision.riskAmount).toBeGreaterThan(0);
@@ -86,7 +89,7 @@ describe("GreenBrainService MT5 push mode", () => {
 
   it("Assisted mode waits for confirmation, then releases only a fresh matching trade", async () => {
     const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
-    await service.updateSettings({ automationMode: "assisted" });
+    await service.updateSettings({ automationMode: "assisted", style: "aggressive" });
     const startMs = 20_000;
 
     const blocked = await buildUptrend(service, startMs);
