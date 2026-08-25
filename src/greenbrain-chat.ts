@@ -12,6 +12,11 @@ export type ChatCommandType =
   | "resume-demo-engine"
   | "set-assisted-mode"
   | "request-market-analysis"
+  | "request-historical-context"
+  | "request-risk-review"
+  | "request-trade-history"
+  | "request-learning-summary"
+  | "request-knowledge-brief"
   | "request-strategy-report";
 
 export interface ChatCommandProposal {
