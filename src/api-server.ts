@@ -1,12 +1,15 @@
 import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, resolve } from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import type { GreenBrainService } from "./greenbrain-service.js";
 
 export interface ApiServerConfig {
   port: number;
   host?: string;
   dashboardDir?: string;
+  apiToken?: string;
+  allowedOrigin?: string;
 }
 
 export interface ApiServerHandle {
@@ -18,13 +21,13 @@ export interface ApiServerHandle {
 export function createApiServer(service: GreenBrainService, config: ApiServerConfig): ApiServerHandle {
   const dashboardDir = resolve(config.dashboardDir ?? "dashboard");
   const server = createServer((req, res) => {
-    setCors(res);
+    setCors(res, config.allowedOrigin);
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
       return;
     }
-    void route(req, res, service, dashboardDir);
+    void route(req, res, service, dashboardDir, config.apiToken);
   });
 
   return {
@@ -43,18 +46,24 @@ export function createApiServer(service: GreenBrainService, config: ApiServerCon
   };
 }
 
-function setCors(res: ServerResponse): void {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+function setCors(res: ServerResponse, allowedOrigin?: string): void {
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin ?? "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Vary", "Origin");
 }
 
-async function route(req: IncomingMessage, res: ServerResponse, service: GreenBrainService, dashboardDir: string): Promise<void> {
+async function route(req: IncomingMessage, res: ServerResponse, service: GreenBrainService, dashboardDir: string, apiToken?: string): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
 
   try {
     if (req.method === "GET" && url.pathname === "/healthz") {
       sendJson(res, 200, { status: "ok", service: "greenbrain", timestampMs: Date.now() });
+      return;
+    }
+
+    if (url.pathname.startsWith("/api/") && apiToken && !hasValidBearerToken(req, apiToken)) {
+      sendJson(res, 401, { error: "GreenBrain API authentication required" });
       return;
     }
 
@@ -162,6 +171,12 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
   } catch (error) {
     sendJson(res, 500, { error: message(error) });
   }
+}
+
+function hasValidBearerToken(req: IncomingMessage, token: string): boolean {
+  const supplied = Buffer.from(req.headers.authorization ?? "", "utf-8");
+  const expected = Buffer.from(`Bearer ${token}`, "utf-8");
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
 function dashboardAssetPath(pathname: string, dashboardDir: string): string | undefined {

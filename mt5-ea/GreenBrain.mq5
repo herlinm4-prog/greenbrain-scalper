@@ -37,6 +37,7 @@
 #property strict
 
 input string ApiBaseUrl               = "http://127.0.0.1:8787"; // must match GREENBRAIN_API_PORT on the Node side
+input string ApiToken                 = "";                       // must match GREENBRAIN_API_TOKEN when API protection is enabled
 input string TradedSymbol             = "EURUSD";                 // must match GreenBrain's hardcoded symbol
 input int    MagicNumber              = 260824;
 input int    EvaluationIntervalSeconds = 2;
@@ -362,6 +363,8 @@ int HttpPost(string path, string jsonBody, string &responseOut)
 {
    string url = ApiBaseUrl + path;
    string headers = "Content-Type: application/json\r\n";
+   if(StringLen(ApiToken) > 0)
+      headers += "Authorization: Bearer " + ApiToken + "\r\n";
    char requestData[];
    StringToCharArray(jsonBody, requestData, 0, StringLen(jsonBody));
    char resultData[];

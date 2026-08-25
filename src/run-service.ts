@@ -9,6 +9,8 @@ import type { Mt5PushAllowlist } from "./mt5-push.js";
 
 const TICK_INTERVAL_MS = 1_200;
 const PORT = Number(process.env.GREENBRAIN_API_PORT ?? 8787);
+const API_TOKEN = process.env.GREENBRAIN_API_TOKEN;
+const DASHBOARD_ORIGIN = process.env.GREENBRAIN_DASHBOARD_ORIGIN;
 
 /**
  * Builds a real MT5 broker adapter when GREENBRAIN_BROKER=mt5 and the
@@ -92,7 +94,11 @@ async function main(): Promise<void> {
     ...(mt5PushAllowlist ? { mt5PushAllowlist } : {}),
   });
 
-  const api = createApiServer(service, { port: PORT });
+  const api = createApiServer(service, {
+    port: PORT,
+    ...(API_TOKEN ? { apiToken: API_TOKEN } : {}),
+    ...(DASHBOARD_ORIGIN ? { allowedOrigin: DASHBOARD_ORIGIN } : {}),
+  });
   await api.listen();
   // eslint-disable-next-line no-console
   console.log(`GreenBrain API listening on http://127.0.0.1:${PORT}`);

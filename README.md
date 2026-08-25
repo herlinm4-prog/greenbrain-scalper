@@ -66,6 +66,15 @@ npm test
 npm run typecheck
 ```
 
-The Mac launcher `start-greenbrain.command` starts the local dashboard without requiring customers to remember development commands. The long-term commercial target is a packaged GreenBrain macOS application that starts its services invisibly and connects to the broker bridge.
+The owner dashboard is deployed at [greenbrain-scalper.herlingym.chatgpt.site](https://greenbrain-scalper.herlingym.chatgpt.site). It displays no operational value unless it came from an authenticated GreenBrain API response.
+
+The Mac launcher `start-greenbrain.command` now starts GreenBrain Core and its local same-origin dashboard together at `http://127.0.0.1:8787`. For remote dashboard access, put an authenticated HTTPS tunnel or reverse proxy in front of the loopback service and configure:
+
+```bash
+GREENBRAIN_API_TOKEN=<long-random-token>
+GREENBRAIN_DASHBOARD_ORIGIN=https://greenbrain-scalper.herlingym.chatgpt.site
+```
+
+Enter the HTTPS endpoint and the same token in the dashboard's **Connections** area. The endpoint is retained on the device; the token is retained only for the active browser session. See `docs/LIVE_DASHBOARD.md` for the exact boundary.
 
 GreenBrain is trading software and trading involves risk. It does not guarantee profits.
