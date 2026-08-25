@@ -48,7 +48,10 @@ export class MarketIntelligence {
     const slow = this.mean(closes.slice(-slowLength));
     const normalizedTrend = (fast - slow) / Math.max(currentPrice, 1e-8);
 
-    const returns = closes.slice(1).map((close, index) => (close - closes[index]) / closes[index]);
+    const returns = closes.slice(1).map((close, index) => {
+      const previous = closes[index]!;
+      return (close - previous) / previous;
+    });
     const volatilityFraction = this.stdDev(returns);
     const trendStrength = this.clamp(Math.abs(normalizedTrend) / Math.max(volatilityFraction, 1e-6), 0, 2) / 2;
 
