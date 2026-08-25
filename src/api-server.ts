@@ -1,9 +1,12 @@
+import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { extname, resolve } from "node:path";
 import type { GreenBrainService } from "./greenbrain-service.js";
 
 export interface ApiServerConfig {
   port: number;
   host?: string;
+  dashboardDir?: string;
 }
 
 export interface ApiServerHandle {
@@ -13,6 +16,7 @@ export interface ApiServerHandle {
 }
 
 export function createApiServer(service: GreenBrainService, config: ApiServerConfig): ApiServerHandle {
+  const dashboardDir = resolve(config.dashboardDir ?? "dashboard");
   const server = createServer((req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") {
@@ -20,17 +24,17 @@ export function createApiServer(service: GreenBrainService, config: ApiServerCon
       res.end();
       return;
     }
-    void route(req, res, service);
+    void route(req, res, service, dashboardDir);
   });
 
   return {
     listen: () =>
-      new Promise<void>((resolve) => {
-        server.listen(config.port, config.host ?? "127.0.0.1", resolve);
+      new Promise<void>((resolveListen) => {
+        server.listen(config.port, config.host ?? "127.0.0.1", resolveListen);
       }),
     close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
+      new Promise<void>((resolveClose, reject) => {
+        server.close((error) => (error ? reject(error) : resolveClose()));
       }),
     address: () => {
       const address = server.address();
@@ -45,10 +49,15 @@ function setCors(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-async function route(req: IncomingMessage, res: ServerResponse, service: GreenBrainService): Promise<void> {
+async function route(req: IncomingMessage, res: ServerResponse, service: GreenBrainService, dashboardDir: string): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
 
   try {
+    if (req.method === "GET" && url.pathname === "/healthz") {
+      sendJson(res, 200, { status: "ok", service: "greenbrain", timestampMs: Date.now() });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/state") {
       sendJson(res, 200, {
         settings: service.getSettings(),
@@ -141,10 +150,43 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
       return;
     }
 
+    if (req.method === "GET") {
+      const dashboardPath = dashboardAssetPath(url.pathname, dashboardDir);
+      if (dashboardPath) {
+        streamFile(res, dashboardPath);
+        return;
+      }
+    }
+
     sendJson(res, 404, { error: "Not found" });
   } catch (error) {
     sendJson(res, 500, { error: message(error) });
   }
+}
+
+function dashboardAssetPath(pathname: string, dashboardDir: string): string | undefined {
+  const relative = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+  if (!["index.html", "app.js", "styles.css"].includes(relative)) return undefined;
+  const filePath = resolve(dashboardDir, relative);
+  return existsSync(filePath) ? filePath : undefined;
+}
+
+function streamFile(res: ServerResponse, filePath: string): void {
+  const contentType = extname(filePath) === ".html"
+    ? "text/html; charset=utf-8"
+    : extname(filePath) === ".js"
+      ? "text/javascript; charset=utf-8"
+      : "text/css; charset=utf-8";
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Cache-Control": "no-store",
+  });
+  const stream = createReadStream(filePath);
+  stream.on("error", () => {
+    if (!res.headersSent) sendJson(res, 500, { error: "Dashboard asset unavailable" });
+    else res.destroy();
+  });
+  stream.pipe(res);
 }
 
 function message(error: unknown): string {
@@ -159,9 +201,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer);
-  }
+  for await (const chunk of req) chunks.push(chunk as Buffer);
   const raw = Buffer.concat(chunks).toString("utf-8");
   if (!raw) return {};
   return JSON.parse(raw) as unknown;
