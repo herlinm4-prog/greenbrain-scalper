@@ -86,4 +86,16 @@ describe("GreenBrainCore", () => {
       timestampMs: 2_000,
     })).rejects.toThrow("failed current checks");
   });
+
+  it("blocks automatic execution when the market feed is stale", async () => {
+    const { core, positions } = makeCore();
+    const result = await core.processSignal({
+      ...request,
+      proposal: { ...request.proposal, id: "stale-feed-signal" },
+      feedHealth: { status: "stale", ageMs: 20_000, canTrade: false, reason: "Market feed is stale" },
+    });
+    expect(result.executionStatus).toBe("not-approved");
+    expect(result.decision.reason).toMatch(/stale/i);
+    expect(positions.openPositions()).toHaveLength(0);
+  });
 });
