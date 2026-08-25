@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 export type TradingStyle = "safe" | "balanced" | "aggressive";
-export type AutomationMode = "assisted" | "automatic";
+export type ExecutionMode = "assisted" | "automatic";
 
 export interface GreenBrainSettings {
   riskPerTradeAmount: number;
@@ -10,7 +10,7 @@ export interface GreenBrainSettings {
   dailyLossLimit: number;
   streakAlertEnabled: boolean;
   automationRunning: boolean;
-  automationMode: AutomationMode;
+  automationMode: ExecutionMode;
 }
 
 export interface SettingsPatch {
@@ -20,11 +20,11 @@ export interface SettingsPatch {
   dailyLossLimit?: number;
   streakAlertEnabled?: boolean;
   automationRunning?: boolean;
-  automationMode?: AutomationMode;
+  automationMode?: ExecutionMode;
 }
 
 export const TRADING_STYLES: TradingStyle[] = ["safe", "balanced", "aggressive"];
-export const AUTOMATION_MODES: AutomationMode[] = ["assisted", "automatic"];
+export const AUTOMATION_MODES: ExecutionMode[] = ["assisted", "automatic"];
 
 export const DEFAULT_SETTINGS: GreenBrainSettings = {
   riskPerTradeAmount: 25,
@@ -104,7 +104,7 @@ function sanitizePatch(input: unknown): SettingsPatch {
   if (typeof record.streakAlertEnabled === "boolean") patch.streakAlertEnabled = record.streakAlertEnabled;
   if (typeof record.automationRunning === "boolean") patch.automationRunning = record.automationRunning;
   if (typeof record.automationMode === "string" && (AUTOMATION_MODES as string[]).includes(record.automationMode)) {
-    patch.automationMode = record.automationMode as AutomationMode;
+    patch.automationMode = record.automationMode as ExecutionMode;
   }
   return patch;
 }
