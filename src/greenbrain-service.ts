@@ -15,6 +15,10 @@ import { ExperienceLoop } from "./experience-loop.js";
 import { GreenBrainKnowledgeBase, type KnowledgeItem, type KnowledgeSource, type KnowledgeBrief } from "./knowledge-base.js";
 import { MomentumSignalGenerator } from "./signal-generator.js";
 import { riskPolicyFor, engineConfigFor } from "./style-policy.js";
+import {
+  AssistedExecutionControl,
+  type AssistedExecutionState,
+} from "./automation-control.js";
 import type {
   Mt5PushAllowlist,
   Mt5PushCloseReport,
@@ -80,6 +84,7 @@ export class GreenBrainService {
   private readonly experience = new ExperienceLoop();
   private readonly knowledgeBase = new GreenBrainKnowledgeBase();
   private readonly signalGenerator: MomentumSignalGenerator;
+  private readonly assistedControl = new AssistedExecutionControl();
   private readonly strategyId = "momentum-v1";
 
   private settingsStore!: SettingsStore;
@@ -166,12 +171,38 @@ export class GreenBrainService {
     const previous = this.settingsStore.get();
     const next = await this.settingsStore.update(rawPatch);
     this.applySettings(next);
+    if (
+      previous.automationMode !== next.automationMode ||
+      previous.automationRunning !== next.automationRunning ||
+      !next.automationRunning
+    ) {
+      this.assistedControl.clear();
+    }
     this.appendLog(describeSettingsChange(previous, next));
     return next;
   }
 
+  getAssistedExecutionState(nowMs = Date.now()): AssistedExecutionState {
+    return this.assistedControl.state(nowMs);
+  }
+
+  confirmPendingDecision(nowMs = Date.now()): AssistedExecutionState {
+    const approval = this.assistedControl.confirm(nowMs);
+    this.appendLog(
+      `User confirmed assisted ${approval.side.toUpperCase()} - one fresh matching decision is armed`,
+    );
+    return this.assistedControl.state(nowMs);
+  }
+
+  discardPendingDecision(nowMs = Date.now()): AssistedExecutionState {
+    this.assistedControl.discard();
+    this.appendLog("User discarded the pending assisted decision");
+    return this.assistedControl.state(nowMs);
+  }
+
   emergencyStop(): void {
     this.halted = true;
+    this.assistedControl.clear();
     this.lastDecision = "HALTED";
     this.lastReason = "Emergency stop engaged. No new automated decisions will be made.";
     this.appendLog("EMERGENCY STOP ENGAGED");
@@ -273,13 +304,7 @@ export class GreenBrainService {
       return this.pushWait(decisionId, decision.reason);
     }
 
-    this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
-    this.lastReason = decision.reason;
-    this.appendLog(
-      `${this.lastDecision} approved for MT5 - confidence ${this.lastConfidencePct}% - risk $${decision.risk.riskAmount.toFixed(2)} (decision ${decisionId})`,
-    );
-
-    return {
+    const mt5Decision: Mt5PushDecision = {
       decisionId,
       action: proposal.side,
       reason: decision.reason,
@@ -289,6 +314,43 @@ export class GreenBrainService {
       takeProfit: proposal.takeProfit,
       riskAmount: decision.risk.riskAmount,
     };
+
+    this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
+
+    if (settings.automationMode === "assisted") {
+      if (this.assistedControl.consumeIfApproved("mt5", proposal.side, nowMs)) {
+        this.lastReason = `Confirmed ${this.lastDecision} remained valid on a fresh MT5 tick and is approved for demo execution.`;
+        this.appendLog(
+          `${this.lastDecision} confirmed for MT5 - confidence ${this.lastConfidencePct}% - risk $${decision.risk.riskAmount.toFixed(2)}`,
+        );
+        return mt5Decision;
+      }
+
+      this.assistedControl.present({
+        id: decisionId,
+        source: "mt5",
+        side: proposal.side,
+        confidencePct: this.lastConfidencePct,
+        reason: decision.reason,
+        riskAmount: decision.risk.riskAmount,
+      }, nowMs);
+      this.lastReason = `Assisted mode: ${this.lastDecision} opportunity is waiting for your confirmation.`;
+      this.appendLog(
+        `${this.lastDecision} opportunity awaiting confirmation - confidence ${this.lastConfidencePct}% - risk $${decision.risk.riskAmount.toFixed(2)}`,
+      );
+      return {
+        decisionId,
+        action: "wait",
+        reason: this.lastReason,
+        confidencePct: this.lastConfidencePct,
+      };
+    }
+
+    this.lastReason = decision.reason;
+    this.appendLog(
+      `${this.lastDecision} approved for MT5 AUTO PILOT - confidence ${this.lastConfidencePct}% - risk $${decision.risk.riskAmount.toFixed(2)} (decision ${decisionId})`,
+    );
+    return mt5Decision;
   }
 
   /** The EA calls this right after trying to place the order MT5-side. */
@@ -475,9 +537,8 @@ export class GreenBrainService {
 
     const policy = riskPolicyFor(settings);
     const core = new GreenBrainCore(this.engine, this.execution, this.journal);
-    const result = await core.processSignal({
-      tradingMode: "demo",
-      automationMode: "automatic",
+    const request = {
+      tradingMode: "demo" as const,
       policy,
       account: this.account,
       market: snapshot,
@@ -485,6 +546,25 @@ export class GreenBrainService {
       timestampMs: nowMs,
       ...(this.historicalContext !== undefined ? { historicalContext: this.historicalContext } : {}),
       feedHealth,
+    };
+
+    if (
+      settings.automationMode === "assisted" &&
+      this.assistedControl.consumeIfApproved("internal", proposal.side, nowMs)
+    ) {
+      await core.confirmAssisted(request);
+      this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
+      this.lastReason = `Confirmed ${this.lastDecision} remained valid on a fresh market tick and was executed in demo mode.`;
+      this.account.openPositions += 1;
+      this.appendLog(
+        `${this.lastDecision} confirmed and opened - confidence ${this.lastConfidencePct}% - risk $${policy.maxRiskAmount?.toFixed(2) ?? settings.riskPerTradeAmount.toFixed(2)}`,
+      );
+      return;
+    }
+
+    const result = await core.processSignal({
+      ...request,
+      automationMode: settings.automationMode,
     });
 
     if (result.decision.status !== "approved") {
@@ -504,10 +584,27 @@ export class GreenBrainService {
     }
 
     this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
+
+    if (result.executionStatus === "awaiting-confirmation") {
+      this.assistedControl.present({
+        id: proposal.id,
+        source: "internal",
+        side: proposal.side,
+        confidencePct: this.lastConfidencePct,
+        reason: result.decision.reason,
+        riskAmount: result.decision.risk.riskAmount,
+      }, nowMs);
+      this.lastReason = `Assisted mode: ${this.lastDecision} opportunity is waiting for your confirmation.`;
+      this.appendLog(
+        `${this.lastDecision} opportunity awaiting confirmation - confidence ${this.lastConfidencePct}% - risk $${result.decision.risk.riskAmount.toFixed(2)}`,
+      );
+      return;
+    }
+
     this.lastReason = result.decision.reason;
     this.account.openPositions += 1;
     this.appendLog(
-      `${this.lastDecision} opened - confidence ${this.lastConfidencePct}% - risk $${result.decision.risk.riskAmount.toFixed(2)}`,
+      `${this.lastDecision} opened by AUTO PILOT - confidence ${this.lastConfidencePct}% - risk $${result.decision.risk.riskAmount.toFixed(2)}`,
     );
   }
 
@@ -844,6 +941,9 @@ function describeSettingsChange(previous: GreenBrainSettings, next: GreenBrainSe
   }
   if (previous.automationRunning !== next.automationRunning) {
     changes.push(next.automationRunning ? "automation resumed" : "automation paused");
+  }
+  if (previous.automationMode !== next.automationMode) {
+    changes.push(`execution mode -> ${next.automationMode}`);
   }
   return changes.length ? `Settings updated: ${changes.join(", ")}` : "Settings updated";
 }
