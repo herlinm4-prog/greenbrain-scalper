@@ -75,7 +75,8 @@ export class RiskAdvisor {
   private trailingStreak(values: number[], predicate: (value: number) => boolean): number {
     let count = 0;
     for (let index = values.length - 1; index >= 0; index -= 1) {
-      if (!predicate(values[index])) break;
+      const value = values[index]!;
+      if (!predicate(value)) break;
       count += 1;
     }
     return count;
