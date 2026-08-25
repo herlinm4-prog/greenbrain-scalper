@@ -1,28 +1,50 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GreenBrain</title><link rel="stylesheet" href="styles.css"></head>
-<body><main class="shell">
-<header><div><p class="eyebrow">AUTOMATED MARKET INTELLIGENCE</p><h1>GreenBrain</h1></div><div class="status"><i></i><span id="watchStatus">WATCHING MARKETS</span></div></header>
-<section class="hero"><div><p class="label">GREENBRAIN DECISION</p><h2 id="decision">WAIT</h2><p id="reason">Watching the market for a qualified opportunity.</p></div><div class="confidence"><strong id="confidence">0%</strong><span>OPPORTUNITY CONFIDENCE</span></div></section>
-<section class="money grid">
-<article><p class="label">TODAY</p><strong id="todayProfit">$0.00</strong><small id="winRate">No closed trades yet</small></article>
-<article><p class="label">RISK / TRADE</p><strong id="riskDisplay">$25</strong><small>GreenBrain calculates position size</small></article>
-<article><p class="label">STREAK</p><strong id="streak">—</strong><small id="streakText">Waiting for results</small></article>
-<article><p class="label">SYSTEM</p><strong class="safe" id="systemState">PROTECTED</strong><small id="executionStateText">Automatic execution</small></article>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080b0a"><title>GreenBrain — Trading Intelligence</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="brand"><span class="brand-mark">G</span><div><strong>GreenBrain</strong><small>TRADING INTELLIGENCE</small></div></div>
+  <nav><a class="active" href="#overview">Overview</a><a href="#intelligence">Intelligence</a><a href="#controls">Risk & Execution</a><a href="#history">Activity</a><a href="#monitor">System Monitor</a></nav>
+  <div class="side-status"><span class="pulse"></span><div><strong id="watchStatus">WATCHING MARKETS</strong><small>Market engine online</small></div></div>
+</aside>
+<main class="workspace">
+<header class="topbar"><div><p class="kicker">LIVE TRADING TERMINAL</p><h1>Market Overview</h1></div><div class="top-actions"><span class="environment">DEMO ENVIRONMENT</span><span class="connection"><i></i>CONNECTED</span></div></header>
+
+<section id="overview" class="decision-panel">
+  <div class="decision-copy"><p class="section-label">CURRENT DECISION</p><div class="decision-line"><h2 id="decision">WAIT</h2><span id="marketState" class="state-pill">SCANNING</span></div><p id="reason">Watching the market for a qualified opportunity.</p></div>
+  <div class="confidence"><span>OPPORTUNITY CONFIDENCE</span><strong id="confidence">0%</strong><div class="confidence-track"><i></i></div></div>
 </section>
-<section class="intelligence-grid">
-<article class="memory-card"><div class="section-head"><div><p class="label">MARKET MEMORY</p><h3>Historical Context</h3></div><span id="trendBadge" class="chip">LEARNING</span></div><div class="memory-stats"><div><span>Observed high</span><strong id="periodHigh">—</strong></div><div><span>Observed low</span><strong id="periodLow">—</strong></div><div><span>Range location</span><strong id="rangeLocation">—</strong></div><div><span>Volatility</span><strong id="volatility">—</strong></div></div><div class="range-track"><i id="rangeMarker"></i></div><p id="marketMemoryText">GreenBrain is building historical context before it trusts a directional bias.</p></article>
-<article class="advisor-card"><div class="section-head"><div><p class="label">GREENBRAIN ADVISOR</p><h3>What the intelligence sees</h3></div><span class="brain-led"><i></i> ACTIVE</span></div><p id="advisorText">Waiting for enough market evidence to explain the current opportunity.</p><div class="advisor-list"><div><span>Trend</span><strong id="advisorTrend">Observing</strong></div><div><span>Location</span><strong id="advisorLocation">Building range</strong></div><div><span>Action</span><strong id="advisorAction">Wait</strong></div></div><small>Advice explains GreenBrain's reasoning. Execution still passes risk and safety gates.</small></article>
+
+<section class="metrics">
+  <article><div class="metric-head"><span>SESSION P&L</span><b>01</b></div><strong id="todayProfit">$0.00</strong><small id="winRate">No closed trades yet</small></article>
+  <article><div class="metric-head"><span>RISK / TRADE</span><b>02</b></div><strong id="riskDisplay">$25</strong><small>Dynamic position sizing</small></article>
+  <article><div class="metric-head"><span>PERFORMANCE</span><b>03</b></div><strong id="streak">—</strong><small id="streakText">Waiting for results</small></article>
+  <article><div class="metric-head"><span>RISK ENGINE</span><b>04</b></div><strong class="positive" id="systemState">PROTECTED</strong><small id="executionStateText">Automatic execution</small></article>
 </section>
-<section class="control">
-<div><p class="label">HOW MUCH CAN GREENBRAIN RISK?</p><div class="risk-buttons"><button data-risk="10">$10</button><button class="selected" data-risk="25">$25</button><button data-risk="50">$50</button><button data-risk="100">$100</button></div></div>
-<div><label>Trading style<select id="mode"><option value="safe">Safe</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></label><label>Execution mode<select id="automationMode"><option value="assisted">Assisted — confirm trades</option><option value="automatic" selected>Auto Pilot — trade automatically</option></select></label><label>Daily profit goal<input id="profitGoal" type="number" value="100" min="1"></label><label>Daily loss limit<input id="lossLimit" type="number" value="50" min="1"></label></div>
-<div class="toggle-row"><label><input id="streakBoost" type="checkbox" checked> Alert me when a strong winning streak may justify reviewing risk</label></div>
+
+<section id="intelligence" class="two-column">
+  <article class="panel market-context"><div class="panel-title"><div><p class="section-label">MARKET CONTEXT</p><h3>Historical Structure</h3></div><span id="trendBadge" class="tag">LEARNING</span></div>
+    <div class="context-grid"><div><span>Observed high</span><strong id="periodHigh">—</strong></div><div><span>Observed low</span><strong id="periodLow">—</strong></div><div><span>Range position</span><strong id="rangeLocation">—</strong></div><div><span>Volatility</span><strong id="volatility">—</strong></div></div>
+    <div class="range-wrap"><div class="range-track"><i id="rangeMarker"></i></div><div class="range-labels"><span>LOW</span><span>HIGH</span></div></div><p id="marketMemoryText" class="body-copy">Building historical context before establishing directional bias.</p>
+  </article>
+  <article class="panel advisor"><div class="panel-title"><div><p class="section-label">DECISION ENGINE</p><h3>Market Assessment</h3></div><span class="live-tag"><i></i>LIVE</span></div><p id="advisorText" class="advisor-copy">Waiting for enough market evidence to explain the current opportunity.</p><div class="assessment"><div><span>Trend</span><strong id="advisorTrend">Observing</strong></div><div><span>Location</span><strong id="advisorLocation">Building range</strong></div><div><span>Action</span><strong id="advisorAction">Wait</strong></div></div><small>Every execution must pass strategy, risk and account-protection gates.</small></article>
 </section>
-<section id="pendingApproval" class="alert pending hidden"><strong id="pendingTitle">TRADE READY</strong><span id="pendingText"></span><div class="pending-actions"><button id="confirmTrade" class="primary">CONFIRM TRADE</button><button id="discardTrade">DISCARD</button></div></section>
-<section id="alert" class="alert hidden"><strong id="alertTitle"></strong><span id="alertText"></span><button id="alertAction" class="hidden">REVIEW RISK</button></section>
-<section class="history"><div class="section-head"><div><p class="label">TRADING HISTORY</p><h3>GreenBrain Memory</h3></div><span id="historySummary">Monitoring every decision</span></div><div class="history-table"><div class="row head"><span>Time</span><span>Decision</span><span>Risk</span><span>Result</span></div><div id="historyRows"></div></div></section>
-<section class="console"><div class="console-head"><span>GREENBRAIN / LIVE MONITOR</span><span id="marketState">SCANNING</span></div><ol id="log"></ol></section>
-<footer><button id="startStop" class="primary">STOP AUTOMATION</button><button id="emergency">EMERGENCY STOP</button></footer>
-<p class="disclaimer">GreenBrain automates monitoring and risk controls; trading involves risk and profits are never guaranteed.</p>
-</main><script src="app.js"></script></body></html>
+
+<section id="controls" class="panel controls"><div class="panel-title"><div><p class="section-label">EXECUTION PARAMETERS</p><h3>Risk & Automation</h3></div><span class="tag">USER CONTROLLED</span></div>
+  <div class="control-grid"><div class="risk-control"><label>Maximum risk per trade</label><div class="risk-buttons"><button data-risk="10">$10</button><button class="selected" data-risk="25">$25</button><button data-risk="50">$50</button><button data-risk="100">$100</button></div></div><label>Trading profile<select id="mode"><option value="safe">Conservative</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></label><label>Execution<select id="automationMode"><option value="assisted">Assisted — confirm trades</option><option value="automatic" selected>Auto Pilot — trade automatically</option></select></label><label>Daily profit target<input id="profitGoal" type="number" value="100" min="1"></label><label>Daily loss ceiling<input id="lossLimit" type="number" value="50" min="1"></label></div>
+  <label class="check-row"><input id="streakBoost" type="checkbox" checked><span>Notify me when sustained performance may justify reviewing risk.</span></label>
+</section>
+
+<section id="pendingApproval" class="alert pending hidden"><div><strong id="pendingTitle">TRADE READY</strong><span id="pendingText"></span></div><div class="pending-actions"><button id="confirmTrade" class="primary">CONFIRM TRADE</button><button id="discardTrade">DISCARD</button></div></section>
+<section id="alert" class="alert hidden"><div><strong id="alertTitle"></strong><span id="alertText"></span></div><button id="alertAction" class="hidden">REVIEW RISK</button></section>
+
+<section id="history" class="panel history"><div class="panel-title"><div><p class="section-label">EXECUTION LEDGER</p><h3>Trading Activity</h3></div><span id="historySummary">Monitoring every decision</span></div><div class="history-table"><div class="row head"><span>TIME</span><span>DECISION</span><span>RISK</span><span>RESULT</span></div><div id="historyRows"></div></div></section>
+<section id="monitor" class="panel console"><div class="console-head"><div><span class="terminal-dot"></span><span>SYSTEM EVENT STREAM</span></div><span>REAL TIME</span></div><ol id="log"></ol></section>
+
+<footer class="actionbar"><div><strong>Execution Control</strong><span>Controls apply immediately to the active session.</span></div><div class="action-buttons"><button id="startStop" class="primary">STOP AUTOMATION</button><button id="emergency" class="danger">EMERGENCY STOP</button></div></footer>
+<p class="disclaimer">Trading involves financial risk. Automated controls reduce operational exposure but do not guarantee profits.</p>
+</main></div><script src="app.js"></script>
+</body></html>
