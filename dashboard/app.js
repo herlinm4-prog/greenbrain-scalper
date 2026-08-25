@@ -1,20 +1,271 @@
-const $=id=>document.getElementById(id);
-const state={mid:1.1,tick:0,running:true,halted:false,seed:91,risk:25,profit:0,wins:0,losses:0,winStreak:0,history:[],prices:[]};
-function random(){state.seed=(1664525*state.seed+1013904223)>>>0;return state.seed/4294967296}
-function money(v){return `${v>=0?"":"-"}$${Math.abs(v).toFixed(2)}`}
-function log(message){const item=document.createElement("li");item.textContent=`${new Date().toLocaleTimeString()}  ${message}`;$("log").prepend(item);while($("log").children.length>8)$("log").lastChild.remove()}
-function showAlert(title,text,action=false){$("alertTitle").textContent=title;$("alertText").textContent=text;$("alert").classList.remove("hidden");$("alertAction").classList.toggle("hidden",!action)}
-function mean(a){return a.length?a.reduce((s,v)=>s+v,0)/a.length:0}
-function std(a){if(!a.length)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length)}
-function marketMemory(){const p=state.prices;if(p.length<10)return null;const high=Math.max(...p),low=Math.min(...p),current=p[p.length-1],range=Math.max(high-low,current*1e-8);const pos=(current-low)/range;const fast=mean(p.slice(-4)),slow=mean(p.slice(-10));const returns=p.slice(1).map((v,i)=>(v-p[i])/p[i]);const vol=std(returns);const trendDelta=(fast-slow)/current;const strength=Math.min(1,Math.abs(trendDelta)/Math.max(vol,.000001));let trend="RANGE";if(trendDelta>vol*.65)trend="STRONG UP";else if(trendDelta>vol*.18)trend="UP";else if(trendDelta<-vol*.65)trend="STRONG DOWN";else if(trendDelta<-vol*.18)trend="DOWN";const nearHigh=pos>.86,nearLow=pos<.14;let action="WAIT",text="GreenBrain is waiting for cleaner market structure.";if((trend==="UP"||trend==="STRONG UP")&&!nearHigh){action="FAVOR BUY";text="Trend and momentum are aligned upward, while price still has room before the observed high."}else if((trend==="DOWN"||trend==="STRONG DOWN")&&!nearLow){action="FAVOR SELL";text="Trend and momentum are aligned downward, while price still has room before the observed low."}else if(nearHigh&&trend.includes("UP")){text="Momentum is positive, but price is near its observed high. GreenBrain avoids chasing poor location."}else if(nearLow&&trend.includes("DOWN")){text="Momentum is negative, but price is near its observed low. GreenBrain avoids chasing poor location."}return{high,low,current,pos,vol,trend,strength,action,text}}
-function renderMemory(memory){if(!memory)return;$("periodHigh").textContent=memory.high.toFixed(5);$("periodLow").textContent=memory.low.toFixed(5);$("rangeLocation").textContent=`${Math.round(memory.pos*100)}%`;$("volatility").textContent=`${(memory.vol*10000).toFixed(2)} bps`;$("trendBadge").textContent=memory.trend;$("rangeMarker").style.left=`${Math.max(2,Math.min(98,memory.pos*100))}%`;$("marketMemoryText").textContent=memory.text;$("advisorTrend").textContent=memory.trend;$("advisorLocation").textContent=memory.pos>.8?"Near observed high":memory.pos<.2?"Near observed low":"Inside historical range";$("advisorAction").textContent=memory.action;$("advisorText").textContent=memory.text}
-function updateDashboard(){$("todayProfit").textContent=money(state.profit);$("todayProfit").className=state.profit>0?"positive":state.profit<0?"negative":"";$("riskDisplay").textContent=`$${state.risk}`;const total=state.wins+state.losses;$("winRate").textContent=total?`${state.wins} wins · ${Math.round(state.wins/total*100)}% win rate`:"No closed trades yet";$("streak").textContent=state.winStreak?`${state.winStreak} WINS`:"—";$("streakText").textContent=state.winStreak>=3?"Strong run detected":state.winStreak?"Positive sequence":"Waiting for results"}
-function addHistory(side,result){state.history.unshift({time:new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),side,risk:state.risk,result});state.history=state.history.slice(0,12);$("historyRows").innerHTML=state.history.map(t=>`<div class="row"><span>${t.time}</span><span>${t.side}</span><span>$${t.risk}</span><span class="${t.result>=0?'positive':'negative'}">${money(t.result)}</span></div>`).join("");$("historySummary").textContent=`${state.history.length} recent trades monitored`}
-function closeSimulatedTrade(side){const won=random()>.44;const result=won?state.risk*(.65+random()*.65):-state.risk;state.profit+=result;if(won){state.wins++;state.winStreak++;showAlert("PROFIT ALERT",`${side} closed ${money(result)}. GreenBrain recorded the result.`)}else{state.losses++;state.winStreak=0;showAlert("RISK ALERT",`${side} closed ${money(result)}. Risk remains limited to $${state.risk}.`)}addHistory(side,result);updateDashboard();const goal=Number($("profitGoal").value)||100,limit=Number($("lossLimit").value)||50;if(state.profit>=goal){state.running=false;showAlert("DAILY GOAL REACHED",`${money(state.profit)} today. Automation paused to protect the session.`)}else if(state.profit<=-limit){state.running=false;showAlert("DAILY LOSS LIMIT",`GreenBrain stopped new trades at ${money(state.profit)}.`)}else if(state.winStreak>=3&&$("streakBoost").checked){showAlert("GREEN STREAK",`${state.winStreak} wins in a row. Performance is strong. Review risk before changing it.`,true)}}
-function tick(){if(!state.running||state.halted)return;const movement=(random()-.5)*.00035;state.mid+=movement;state.tick++;state.prices.push(state.mid);if(state.prices.length>120)state.prices.shift();const memory=marketMemory();renderMemory(memory);const momentum=movement/state.mid;let confidence=Math.min(91,Math.round(45+Math.abs(momentum)*170000));let direction=movement>0?"BUY":"SELL";let actionable=confidence>=70;if(memory){if(memory.action==="FAVOR BUY"&&direction==="BUY")confidence=Math.min(95,confidence+8);if(memory.action==="FAVOR SELL"&&direction==="SELL")confidence=Math.min(95,confidence+8);if(memory.action==="WAIT")confidence=Math.max(0,confidence-12);actionable=confidence>=70&&((memory.action==="FAVOR BUY"&&direction==="BUY")||(memory.action==="FAVOR SELL"&&direction==="SELL"));}$("confidence").textContent=`${confidence}%`;$("decision").textContent=actionable?direction:"WAIT";$("reason").textContent=actionable?`Qualified ${direction} opportunity. Live momentum agrees with GreenBrain market memory and risk checks are next.`:memory?memory.text:"Building historical context before trusting a trade.";$("marketState").textContent=actionable?"OPPORTUNITY":"SCANNING";if(state.tick%4===0)log(actionable?`${direction} opportunity · confidence ${confidence}% · risk cap $${state.risk}`:`Market scanned · ${memory?memory.action:"learning history"}`);if(actionable&&state.tick%7===0)closeSimulatedTrade(direction)}
-document.querySelectorAll("[data-risk]").forEach(b=>b.addEventListener("click",()=>{state.risk=Number(b.dataset.risk);document.querySelectorAll("[data-risk]").forEach(x=>x.classList.toggle("selected",x===b));updateDashboard();log(`Risk per trade changed to $${state.risk}`)}));
-$("mode").addEventListener("change",()=>log(`Trading style changed to ${$("mode").value}`));
-$("alertAction").addEventListener("click",()=>document.querySelector(".control").scrollIntoView({behavior:"smooth"}));
-$("startStop").addEventListener("click",()=>{if(state.halted)return;state.running=!state.running;$("startStop").textContent=state.running?"STOP AUTOMATION":"START AUTOMATION";$("watchStatus").textContent=state.running?"WATCHING MARKETS":"PAUSED";$("systemState").textContent=state.running?"PROTECTED":"PAUSED";log(state.running?"Automation resumed":"Automation paused")});
-$("emergency").addEventListener("click",()=>{state.halted=true;state.running=false;$("decision").textContent="HALTED";$("reason").textContent="Emergency stop engaged. New automated decisions are frozen.";$("watchStatus").textContent="EMERGENCY STOP";$("systemState").textContent="HALTED";$("startStop").disabled=true;showAlert("EMERGENCY STOP","Automation is frozen. No new trades can be initiated.");log("EMERGENCY STOP ENGAGED")});
-log("GreenBrain intelligence initialized. Building market memory.");updateDashboard();setInterval(tick,1200);tick();
+// GreenBrain dashboard client.
+// This file no longer simulates anything locally. Every number on screen
+// comes from GET /api/state on the GreenBrain service (src/run-service.ts).
+// Controls write back via POST /api/settings and POST /api/emergency-stop.
+
+const $ = (id) => document.getElementById(id);
+
+const params = new URLSearchParams(window.location.search);
+if (params.get("api")) localStorage.setItem("greenbrainApiBase", params.get("api"));
+const API_BASE = localStorage.getItem("greenbrainApiBase") || "http://127.0.0.1:8787";
+
+const POLL_MS = 1500;
+let lastTopHistoryKey = null;
+let connected = false;
+
+function money(value) {
+  const sign = value >= 0 ? "" : "-";
+  return `${sign}$${Math.abs(value).toFixed(2)}`;
+}
+
+function log(message) {
+  const item = document.createElement("li");
+  item.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
+  $("log").prepend(item);
+  while ($("log").children.length > 8) $("log").lastChild.remove();
+}
+
+function showAlert(title, text, showAction = false) {
+  $("alertTitle").textContent = title;
+  $("alertText").textContent = text;
+  $("alert").classList.remove("hidden");
+  $("alertAction").classList.toggle("hidden", !showAction);
+}
+
+function hideAlert() {
+  $("alert").classList.add("hidden");
+}
+
+async function apiGet(path) {
+  const response = await fetch(`${API_BASE}${path}`);
+  if (!response.ok) throw new Error(`GET ${path} failed: ${response.status}`);
+  return response.json();
+}
+
+async function apiPost(path, body) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `POST ${path} failed: ${response.status}`);
+  return data;
+}
+
+function setConnectionState(isConnected) {
+  if (isConnected === connected) return;
+  connected = isConnected;
+  if (!isConnected) {
+    $("watchStatus").textContent = "GREENBRAIN SERVICE OFFLINE";
+    $("decision").textContent = "OFFLINE";
+    $("reason").textContent = "Cannot reach the GreenBrain service. Start it with npm start, then reload this page.";
+    $("marketState").textContent = "OFFLINE";
+  }
+}
+
+function renderSettings(settings) {
+  document.querySelectorAll("[data-risk]").forEach((button) => {
+    button.classList.toggle("selected", Number(button.dataset.risk) === settings.riskPerTradeAmount);
+  });
+  if (document.activeElement !== $("mode")) $("mode").value = settings.style;
+  if (document.activeElement !== $("profitGoal")) $("profitGoal").value = settings.dailyProfitGoal;
+  if (document.activeElement !== $("lossLimit")) $("lossLimit").value = settings.dailyLossLimit;
+  $("streakBoost").checked = settings.streakAlertEnabled;
+  $("riskDisplay").textContent = `$${settings.riskPerTradeAmount}`;
+  $("startStop").textContent = settings.automationRunning ? "STOP AUTOMATION" : "START AUTOMATION";
+}
+
+function renderMarketMemory(memory) {
+  if (!memory) {
+    $("trendBadge").textContent = "LEARNING";
+    $("marketMemoryText").textContent = "GreenBrain is building historical context before it trusts a directional bias.";
+    $("advisorTrend").textContent = "Observing";
+    $("advisorLocation").textContent = "Building range";
+    $("advisorAction").textContent = "Wait";
+    $("advisorText").textContent = "Waiting for enough market evidence to explain the current opportunity.";
+    return;
+  }
+  $("periodHigh").textContent = memory.periodHigh.toFixed(5);
+  $("periodLow").textContent = memory.periodLow.toFixed(5);
+  $("rangeLocation").textContent = `${memory.rangePositionPct}%`;
+  $("volatility").textContent = `${memory.volatilityBps.toFixed(2)} bps`;
+  $("trendBadge").textContent = memory.trend.toUpperCase();
+  $("rangeMarker").style.left = `${Math.max(2, Math.min(98, memory.rangePositionPct))}%`;
+  $("marketMemoryText").textContent = memory.text;
+  $("advisorTrend").textContent = memory.trend;
+  $("advisorLocation").textContent =
+    memory.rangePositionPct > 80 ? "Near observed high" : memory.rangePositionPct < 20 ? "Near observed low" : "Inside historical range";
+  $("advisorAction").textContent = memory.action;
+  $("advisorText").textContent = memory.text;
+}
+
+function renderHistory(history) {
+  $("historyRows").innerHTML = history
+    .map(
+      (row) =>
+        `<div class="row"><span>${new Date(row.timeIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><span>${row.side}</span><span>$${row.riskAmount.toFixed(2)}</span><span class="${row.result >= 0 ? "positive" : "negative"}">${money(row.result)}</span></div>`,
+    )
+    .join("");
+  $("historySummary").textContent = history.length ? `${history.length} recent trades monitored` : "Monitoring every decision";
+}
+
+function renderLog(entries) {
+  $("log").innerHTML = "";
+  entries
+    .slice(0, 8)
+    .reverse()
+    .forEach((entry) => log(entry));
+}
+
+function systemStateClass(state) {
+  if (state === "HALTED") return "negative";
+  if (state === "RISK-REVIEW") return "";
+  return "safe";
+}
+
+function renderAlerts(telemetry) {
+  const topRow = telemetry.history[0];
+  const topKey = topRow ? `${topRow.timeIso}:${topRow.result}` : null;
+  if (topKey && topKey !== lastTopHistoryKey) {
+    lastTopHistoryKey = topKey;
+    if (topRow.result >= 0) {
+      showAlert("PROFIT ALERT", `${topRow.side} closed ${money(topRow.result)}. GreenBrain recorded the result.`);
+    } else {
+      showAlert("RISK ALERT", `${topRow.side} closed ${money(topRow.result)}. Risk remains limited by your settings.`);
+    }
+    return;
+  }
+
+  if (telemetry.halted) {
+    showAlert("EMERGENCY STOP", "Automation is frozen. No new trades can be initiated.");
+    return;
+  }
+
+  const advice = telemetry.riskAdvice;
+  if (advice && advice.requiresUserConfirmation) {
+    if (advice.state === "review-increase") {
+      showAlert("GREEN STREAK", `${advice.reason} Suggested risk: $${advice.suggestedRiskAmount.toFixed(0)}.`, true);
+      return;
+    }
+    if (advice.state === "reduce") {
+      showAlert("RISK REVIEW", advice.reason, true);
+      return;
+    }
+  }
+  if (advice && advice.state === "stop") {
+    showAlert("DAILY LOSS LIMIT", advice.reason);
+    return;
+  }
+
+  hideAlert();
+}
+
+function render(state) {
+  const { settings, telemetry } = state;
+  renderSettings(settings);
+
+  $("watchStatus").textContent = telemetry.halted ? "EMERGENCY STOP" : telemetry.running ? "WATCHING MARKETS" : "PAUSED";
+  $("decision").textContent = telemetry.decision;
+  $("confidence").textContent = `${telemetry.confidencePct}%`;
+  $("reason").textContent = telemetry.reason;
+  $("marketState").textContent = telemetry.decision === "BUY" || telemetry.decision === "SELL" ? "OPPORTUNITY" : "SCANNING";
+
+  $("todayProfit").textContent = money(telemetry.today.profit);
+  $("todayProfit").className = telemetry.today.profit > 0 ? "positive" : telemetry.today.profit < 0 ? "negative" : "";
+  $("winRate").textContent = telemetry.today.wins + telemetry.today.losses
+    ? `${telemetry.today.wins} wins - ${telemetry.today.winRatePct}% win rate`
+    : "No closed trades yet";
+
+  $("streak").textContent = telemetry.streak.winStreak ? `${telemetry.streak.winStreak} WINS` : "-";
+  $("streakText").textContent = telemetry.streak.winStreak >= 3
+    ? "Strong run detected"
+    : telemetry.streak.winStreak
+      ? "Positive sequence"
+      : "Waiting for results";
+
+  const systemState = $("systemState");
+  systemState.textContent = telemetry.systemState;
+  systemState.className = systemStateClass(telemetry.systemState);
+
+  renderMarketMemory(telemetry.marketMemory);
+  renderHistory(telemetry.history);
+  renderLog(telemetry.log);
+  renderAlerts(telemetry);
+
+  $("startStop").disabled = telemetry.halted;
+  $("emergency").disabled = telemetry.halted;
+}
+
+async function refresh() {
+  try {
+    const state = await apiGet("/api/state");
+    setConnectionState(true);
+    render(state);
+  } catch (error) {
+    setConnectionState(false);
+  }
+}
+
+async function updateSettings(patch, description) {
+  try {
+    await apiPost("/api/settings", patch);
+    if (description) log(description);
+    await refresh();
+  } catch (error) {
+    log(`Settings update rejected: ${error.message}`);
+  }
+}
+
+document.querySelectorAll("[data-risk]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const amount = Number(button.dataset.risk);
+    updateSettings({ riskPerTradeAmount: amount }, `Risk per trade changed to $${amount}`);
+  });
+});
+
+$("mode").addEventListener("change", () => {
+  updateSettings({ style: $("mode").value }, `Trading style changed to ${$("mode").value}`);
+});
+
+$("profitGoal").addEventListener("change", () => {
+  updateSettings({ dailyProfitGoal: Number($("profitGoal").value) || 1 }, "Daily profit goal updated");
+});
+
+$("lossLimit").addEventListener("change", () => {
+  updateSettings({ dailyLossLimit: Number($("lossLimit").value) || 1 }, "Daily loss limit updated");
+});
+
+$("streakBoost").addEventListener("change", () => {
+  updateSettings({ streakAlertEnabled: $("streakBoost").checked });
+});
+
+$("alertAction").addEventListener("click", () => {
+  document.querySelector(".control").scrollIntoView({ behavior: "smooth" });
+});
+
+$("startStop").addEventListener("click", async () => {
+  try {
+    const state = await apiGet("/api/state");
+    await updateSettings(
+      { automationRunning: !state.settings.automationRunning },
+      state.settings.automationRunning ? "Automation paused" : "Automation resumed",
+    );
+  } catch (error) {
+    log("Could not toggle automation - service unreachable");
+  }
+});
+
+$("emergency").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/emergency-stop");
+    log("EMERGENCY STOP ENGAGED");
+    await refresh();
+  } catch (error) {
+    log("Could not reach the service to engage the emergency stop");
+  }
+});
+
+log("GreenBrain dashboard connecting to live service...");
+refresh();
+setInterval(refresh, POLL_MS);
