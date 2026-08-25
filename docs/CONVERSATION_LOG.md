@@ -267,3 +267,13 @@ Required the redesigned frontend to account for text size and legibility.
 ### Assistant development outcome
 
 Corrected the visual system without reverting the new identity. Increased minimum sizes for navigation, labels, tables, decision logs, controls, secondary explanations, risk data, connection information, and GreenBrain chat; raised secondary-text contrast; improved line height; and applied a larger mobile reading scale. The production build passed and the updated typography was deployed to the existing site.
+
+## 2026-08-25 — Live dashboard completion and authenticated telemetry
+
+### User
+
+Directed Codex to finish the GreenBrain dashboard process and continue the last agreed work without pausing.
+
+### Assistant development outcome
+
+Reconciled the premium hosted Decision Theater with the authoritative GreenBrain service. Removed invented account, market, performance, strategy and MT5 connection claims; added polling of `/api/state`, live/offline/stale states, verified account and market values, broker-mode identification, Market Memory, journal events, knowledge brief, assisted confirmations, backend-confirmed settings, and a two-step emergency stop. Added a Connections workspace for an HTTPS GreenBrain endpoint and a session-only access token. Added optional bearer authentication and explicit CORS origin support to the core API, updated the MQL5 EA to send the token, and corrected the Mac launcher to start GreenBrain Core rather than a disconnected static server. The hosted dashboard remains at https://greenbrain-scalper.herlingym.chatgpt.site. Physical MT5 demo streaming still requires starting the configured service and attaching the EA to the allowlisted demo account.

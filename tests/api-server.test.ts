@@ -89,6 +89,24 @@ describe("GreenBrain API server", () => {
   });
 });
 
+describe("GreenBrain API server authentication", () => {
+  it("requires the configured bearer token for API routes", async () => {
+    const service = await GreenBrainService.create({ seed: 10 });
+    const protectedHandle = createApiServer(service, { port: 0, apiToken: "dashboard-secret" });
+    await protectedHandle.listen();
+    const protectedBaseUrl = `http://127.0.0.1:${protectedHandle.address()!.port}`;
+
+    try {
+      expect((await fetch(`${protectedBaseUrl}/api/state`)).status).toBe(401);
+      expect((await fetch(`${protectedBaseUrl}/api/state`, { headers: { Authorization: "Bearer wrong" } })).status).toBe(401);
+      expect((await fetch(`${protectedBaseUrl}/api/state`, { headers: { Authorization: "Bearer dashboard-secret" } })).status).toBe(200);
+      expect((await fetch(`${protectedBaseUrl}/api/state`, { method: "OPTIONS" })).status).toBe(204);
+    } finally {
+      await protectedHandle.close();
+    }
+  });
+});
+
 describe("GreenBrain API server - MT5 push mode", () => {
   let handle: ApiServerHandle;
   let baseUrl: string;

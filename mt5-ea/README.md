@@ -29,6 +29,8 @@ a decision. The EA is what talks to MT5's native trading functions.
    ```
    GREENBRAIN_MT5_PUSH_LOGIN=<your demo account login> \
    GREENBRAIN_MT5_PUSH_SERVER=<your demo account server, exact broker string> \
+   GREENBRAIN_API_TOKEN=<generate-a-long-random-token> \
+   GREENBRAIN_DASHBOARD_ORIGIN=https://greenbrain-scalper.herlingym.chatgpt.site \
    npm start
    ```
    The login/server must match your MT5 account exactly - GreenBrain rejects
@@ -66,6 +68,7 @@ a decision. The EA is what talks to MT5's native trading functions.
 | Input | Meaning |
 |---|---|
 | `ApiBaseUrl` | Where the GreenBrain Node service is listening. |
+| `ApiToken` | Must match `GREENBRAIN_API_TOKEN` when API protection is enabled. Leave empty only for local, non-tunneled testing. |
 | `TradedSymbol` | Must match GreenBrain's hardcoded symbol (`EURUSD`). |
 | `MagicNumber` | Must match on both sides if you ever also run the Python bridge; keeps GreenBrain's orders identifiable. |
 | `EvaluationIntervalSeconds` | How often the EA asks GreenBrain for a decision. |

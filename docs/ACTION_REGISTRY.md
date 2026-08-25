@@ -24,6 +24,7 @@ This registry is the operational source of truth for product ideas, defects, req
 | GB-018 | High | Action | Planned | Add notifications, incidents, and reconnect reporting |
 | GB-019 | Medium | Requirement | In progress | Build responsive web/PWA for Mac and mobile |
 | GB-020 | Medium | Requirement | Planned | Export a complete user strategy compilation |
+| GB-021 | High | Security | Verified | Protect remote dashboard API routes with bearer authentication and explicit CORS origin |
 
 ## Acceptance criteria for current in-progress work
 
