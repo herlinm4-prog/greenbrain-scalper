@@ -29,6 +29,7 @@ export * from "./telemetry.js";
 export * from "./settings-store.js";
 export * from "./style-policy.js";
 export * from "./signal-generator.js";
+export * from "./automation-control.js";
 export * from "./greenbrain-service.js";
 export * from "./api-server.js";
 export * from "./mt5-push.js";
