@@ -1,7 +1,7 @@
 // GreenBrain dashboard client.
 // This file no longer simulates anything locally. Every number on screen
 // comes from GET /api/state on the GreenBrain service (src/run-service.ts).
-// Controls write back via POST /api/settings and POST /api/emergency-stop.
+// Controls write back through the local GreenBrain API.
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,8 +59,9 @@ function setConnectionState(isConnected) {
   if (!isConnected) {
     $("watchStatus").textContent = "GREENBRAIN SERVICE OFFLINE";
     $("decision").textContent = "OFFLINE";
-    $("reason").textContent = "Cannot reach the GreenBrain service. Start it with npm start, then reload this page.";
+    $("reason").textContent = "Cannot reach the GreenBrain service. Start it, then reload this page.";
     $("marketState").textContent = "OFFLINE";
+    $("pendingApproval").classList.add("hidden");
   }
 }
 
@@ -69,11 +70,29 @@ function renderSettings(settings) {
     button.classList.toggle("selected", Number(button.dataset.risk) === settings.riskPerTradeAmount);
   });
   if (document.activeElement !== $("mode")) $("mode").value = settings.style;
+  if (document.activeElement !== $("automationMode")) $("automationMode").value = settings.automationMode;
   if (document.activeElement !== $("profitGoal")) $("profitGoal").value = settings.dailyProfitGoal;
   if (document.activeElement !== $("lossLimit")) $("lossLimit").value = settings.dailyLossLimit;
   $("streakBoost").checked = settings.streakAlertEnabled;
   $("riskDisplay").textContent = `$${settings.riskPerTradeAmount}`;
   $("startStop").textContent = settings.automationRunning ? "STOP AUTOMATION" : "START AUTOMATION";
+  $("executionStateText").textContent = settings.automationMode === "automatic"
+    ? "Auto Pilot executes qualified demo trades"
+    : "Assisted mode requires confirmation";
+}
+
+function renderPending(assisted, settings) {
+  const panel = $("pendingApproval");
+  const pending = assisted?.pending;
+  if (settings.automationMode !== "assisted" || !pending) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const seconds = Math.max(0, Math.ceil((pending.expiresAtMs - Date.now()) / 1000));
+  $("pendingTitle").textContent = `${pending.side.toUpperCase()} READY`;
+  $("pendingText").textContent = `${pending.confidencePct}% confidence · risk $${pending.riskAmount.toFixed(2)} · confirm within ${seconds}s. GreenBrain will re-check a fresh matching opportunity before execution.`;
+  panel.classList.remove("hidden");
 }
 
 function renderMarketMemory(memory) {
@@ -162,8 +181,9 @@ function renderAlerts(telemetry) {
 }
 
 function render(state) {
-  const { settings, telemetry } = state;
+  const { settings, telemetry, assisted } = state;
   renderSettings(settings);
+  renderPending(assisted, settings);
 
   $("watchStatus").textContent = telemetry.halted ? "EMERGENCY STOP" : telemetry.running ? "WATCHING MARKETS" : "PAUSED";
   $("decision").textContent = telemetry.decision;
@@ -228,6 +248,16 @@ $("mode").addEventListener("change", () => {
   updateSettings({ style: $("mode").value }, `Trading style changed to ${$("mode").value}`);
 });
 
+$("automationMode").addEventListener("change", () => {
+  const mode = $("automationMode").value;
+  updateSettings(
+    { automationMode: mode },
+    mode === "automatic"
+      ? "AUTO PILOT enabled - GreenBrain may execute qualified demo trades automatically"
+      : "Assisted mode enabled - trades require confirmation",
+  );
+});
+
 $("profitGoal").addEventListener("change", () => {
   updateSettings({ dailyProfitGoal: Number($("profitGoal").value) || 1 }, "Daily profit goal updated");
 });
@@ -238,6 +268,27 @@ $("lossLimit").addEventListener("change", () => {
 
 $("streakBoost").addEventListener("change", () => {
   updateSettings({ streakAlertEnabled: $("streakBoost").checked });
+});
+
+$("confirmTrade").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/assisted/confirm");
+    log("Trade confirmed - GreenBrain will execute only if a fresh matching opportunity still passes every safety gate");
+    await refresh();
+  } catch (error) {
+    log(`Confirmation rejected: ${error.message}`);
+    await refresh();
+  }
+});
+
+$("discardTrade").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/assisted/discard");
+    log("Pending trade discarded");
+    await refresh();
+  } catch (error) {
+    log(`Could not discard pending trade: ${error.message}`);
+  }
 });
 
 $("alertAction").addEventListener("click", () => {
