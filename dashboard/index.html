@@ -8,7 +8,7 @@
 <article><p class="label">TODAY</p><strong id="todayProfit">$0.00</strong><small id="winRate">No closed trades yet</small></article>
 <article><p class="label">RISK / TRADE</p><strong id="riskDisplay">$25</strong><small>GreenBrain calculates position size</small></article>
 <article><p class="label">STREAK</p><strong id="streak">—</strong><small id="streakText">Waiting for results</small></article>
-<article><p class="label">SYSTEM</p><strong class="safe" id="systemState">PROTECTED</strong><small>Daily limits active</small></article>
+<article><p class="label">SYSTEM</p><strong class="safe" id="systemState">PROTECTED</strong><small id="executionStateText">Automatic execution</small></article>
 </section>
 <section class="intelligence-grid">
 <article class="memory-card"><div class="section-head"><div><p class="label">MARKET MEMORY</p><h3>Historical Context</h3></div><span id="trendBadge" class="chip">LEARNING</span></div><div class="memory-stats"><div><span>Observed high</span><strong id="periodHigh">—</strong></div><div><span>Observed low</span><strong id="periodLow">—</strong></div><div><span>Range location</span><strong id="rangeLocation">—</strong></div><div><span>Volatility</span><strong id="volatility">—</strong></div></div><div class="range-track"><i id="rangeMarker"></i></div><p id="marketMemoryText">GreenBrain is building historical context before it trusts a directional bias.</p></article>
@@ -16,9 +16,10 @@
 </section>
 <section class="control">
 <div><p class="label">HOW MUCH CAN GREENBRAIN RISK?</p><div class="risk-buttons"><button data-risk="10">$10</button><button class="selected" data-risk="25">$25</button><button data-risk="50">$50</button><button data-risk="100">$100</button></div></div>
-<div><label>Trading style<select id="mode"><option value="safe">Safe</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></label><label>Daily profit goal<input id="profitGoal" type="number" value="100" min="1"></label><label>Daily loss limit<input id="lossLimit" type="number" value="50" min="1"></label></div>
+<div><label>Trading style<select id="mode"><option value="safe">Safe</option><option value="balanced" selected>Balanced</option><option value="aggressive">Aggressive</option></select></label><label>Execution mode<select id="automationMode"><option value="assisted">Assisted — confirm trades</option><option value="automatic" selected>Auto Pilot — trade automatically</option></select></label><label>Daily profit goal<input id="profitGoal" type="number" value="100" min="1"></label><label>Daily loss limit<input id="lossLimit" type="number" value="50" min="1"></label></div>
 <div class="toggle-row"><label><input id="streakBoost" type="checkbox" checked> Alert me when a strong winning streak may justify reviewing risk</label></div>
 </section>
+<section id="pendingApproval" class="alert pending hidden"><strong id="pendingTitle">TRADE READY</strong><span id="pendingText"></span><div class="pending-actions"><button id="confirmTrade" class="primary">CONFIRM TRADE</button><button id="discardTrade">DISCARD</button></div></section>
 <section id="alert" class="alert hidden"><strong id="alertTitle"></strong><span id="alertText"></span><button id="alertAction" class="hidden">REVIEW RISK</button></section>
 <section class="history"><div class="section-head"><div><p class="label">TRADING HISTORY</p><h3>GreenBrain Memory</h3></div><span id="historySummary">Monitoring every decision</span></div><div class="history-table"><div class="row head"><span>Time</span><span>Decision</span><span>Risk</span><span>Result</span></div><div id="historyRows"></div></div></section>
 <section class="console"><div class="console-head"><span>GREENBRAIN / LIVE MONITOR</span><span id="marketState">SCANNING</span></div><ol id="log"></ol></section>
