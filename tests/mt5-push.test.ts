@@ -20,6 +20,19 @@ function snapshot(overrides: Partial<Mt5PushSnapshot> = {}): Mt5PushSnapshot {
   };
 }
 
+async function buildUptrend(service: GreenBrainService, startMs: number, count = 6) {
+  let decision = await service.evaluateExternalTick(snapshot({ timestampMs: startMs }));
+  for (let index = 1; index < count; index += 1) {
+    const bid = 1.1 + index * 0.0002;
+    decision = await service.evaluateExternalTick(snapshot({
+      bid,
+      ask: bid + 0.0001,
+      timestampMs: startMs + index * 100,
+    }));
+  }
+  return decision;
+}
+
 describe("GreenBrainService MT5 push mode", () => {
   it("rejects push calls when push mode is not configured", async () => {
     const service = await GreenBrainService.create({ seed: 30 });
@@ -60,6 +73,38 @@ describe("GreenBrainService MT5 push mode", () => {
     const decision = await service.evaluateExternalTick(snapshot());
     expect(decision.action).toBe("wait");
     expect(decision.decisionId).toBeTruthy();
+  });
+
+  it("Auto Pilot returns a qualified fresh trade to the MT5 EA without manual confirmation", async () => {
+    const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
+    await service.updateSettings({ automationMode: "automatic" });
+    const decision = await buildUptrend(service, 10_000);
+    expect(decision.action).toBe("buy");
+    expect(decision.riskAmount).toBeGreaterThan(0);
+    expect(service.getAssistedExecutionState(10_600).pending).toBeUndefined();
+  });
+
+  it("Assisted mode waits for confirmation, then releases only a fresh matching trade", async () => {
+    const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
+    await service.updateSettings({ automationMode: "assisted" });
+    const startMs = 20_000;
+
+    const blocked = await buildUptrend(service, startMs);
+    expect(blocked.action).toBe("wait");
+    const pending = service.getAssistedExecutionState(startMs + 550).pending;
+    expect(pending?.side).toBe("buy");
+    expect(pending?.source).toBe("mt5");
+
+    service.confirmPendingDecision(startMs + 600);
+    const bid = 1.1012;
+    const released = await service.evaluateExternalTick(snapshot({
+      bid,
+      ask: bid + 0.0001,
+      timestampMs: startMs + 700,
+    }));
+
+    expect(released.action).toBe("buy");
+    expect(service.getAssistedExecutionState(startMs + 701).armed).toBeUndefined();
   });
 
   it("full lifecycle: fill report opens a position, close report journals the real outcome", async () => {
