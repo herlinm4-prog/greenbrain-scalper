@@ -1,7 +1,7 @@
-// GreenBrain dashboard client.
-// This file no longer simulates anything locally. Every number on screen
-// comes from GET /api/state on the GreenBrain service (src/run-service.ts).
-// Controls write back via POST /api/settings and POST /api/emergency-stop.
+// GreenBrain flight-deck client.
+// Every reading comes from GET /api/state on the GreenBrain service
+// (src/run-service.ts). Controls write back via POST /api/settings,
+// /api/confirm-trade, /api/dismiss-trade, and /api/emergency-stop.
 
 const $ = (id) => document.getElementById(id);
 
@@ -10,8 +10,28 @@ if (params.get("api")) localStorage.setItem("greenbrainApiBase", params.get("api
 const API_BASE = localStorage.getItem("greenbrainApiBase") || "http://127.0.0.1:8787";
 
 const POLL_MS = 1500;
+const ARC_CIRCUMFERENCE = 2 * Math.PI * 92;
+
 let lastTopHistoryKey = null;
 let connected = false;
+let emergencyGuardLifted = false;
+let emergencyGuardTimer = null;
+
+const DECISION_COPY = {
+  BUY: "CLEARED TO BUY",
+  SELL: "CLEARED TO SELL",
+  WAIT: "HOLDING PATTERN",
+  PENDING: "AWAITING CLEARANCE",
+  HALTED: "GROUNDED",
+  OFFLINE: "INSTRUMENT OFFLINE",
+};
+
+const SYSTEM_COPY = {
+  PROTECTED: "SYSTEMS NOMINAL",
+  PAUSED: "STANDING BY",
+  HALTED: "GROUNDED",
+  "RISK-REVIEW": "CAUTION ADVISORY",
+};
 
 function money(value) {
   const sign = value >= 0 ? "" : "-";
@@ -25,15 +45,9 @@ function log(message) {
   while ($("log").children.length > 8) $("log").lastChild.remove();
 }
 
-function showAlert(title, text, showAction = false) {
-  $("alertTitle").textContent = title;
-  $("alertText").textContent = text;
-  $("alert").classList.remove("hidden");
-  $("alertAction").classList.toggle("hidden", !showAction);
-}
-
-function hideAlert() {
-  $("alert").classList.add("hidden");
+function renderLog(entries) {
+  $("log").innerHTML = "";
+  entries.slice(0, 8).reverse().forEach((entry) => log(entry));
 }
 
 async function apiGet(path) {
@@ -57,13 +71,54 @@ function setConnectionState(isConnected) {
   if (isConnected === connected) return;
   connected = isConnected;
   if (!isConnected) {
-    $("watchStatus").textContent = "GREENBRAIN SERVICE OFFLINE";
-    $("decision").textContent = "OFFLINE";
+    $("watchStatus").textContent = "SERVICE OFFLINE";
+    $("decisionLabel").textContent = DECISION_COPY.OFFLINE;
     $("reason").textContent = "Cannot reach the GreenBrain service. Start it with npm start, then reload this page.";
     $("marketState").textContent = "OFFLINE";
   }
 }
 
+// ---------- gauge (signature instrument) ----------
+function renderGauge(telemetry) {
+  const decision = telemetry.decision;
+  const group = $("horizonGroup");
+  const sky = $("horizonSky");
+  const ground = $("horizonGround");
+  const arc = $("confidenceArc");
+  const stripes = $("haltStripes");
+  const readout = $("confidence");
+  const label = $("decisionLabel");
+
+  label.textContent = DECISION_COPY[decision] || decision;
+  readout.textContent = `${telemetry.confidencePct}%`;
+
+  let tilt = 0;
+  let skyColor = "#1a222c", groundColor = "#1a222c", arcColor = "var(--steel)";
+  stripes.classList.add("hidden");
+
+  if (decision === "BUY") {
+    tilt = 18; skyColor = "#1d5a43"; groundColor = "#12251d"; arcColor = "var(--phosphor)";
+  } else if (decision === "SELL") {
+    tilt = -18; skyColor = "#251414"; groundColor = "#5a1d1d"; arcColor = "var(--alert)";
+  } else if (decision === "PENDING") {
+    tilt = 0; skyColor = "#4d3a12"; groundColor = "#4d3a12"; arcColor = "var(--amber)";
+  } else if (decision === "HALTED") {
+    tilt = 0; skyColor = "#3a1414"; groundColor = "#3a1414"; arcColor = "var(--alert)";
+    stripes.classList.remove("hidden");
+  }
+
+  group.style.transform = `rotate(${tilt}deg)`;
+  group.style.transformOrigin = "110px 110px";
+  sky.style.fill = skyColor;
+  ground.style.fill = groundColor;
+  arc.style.stroke = arcColor;
+  readout.style.color = arcColor;
+
+  const filled = Math.max(0, Math.min(1, telemetry.confidencePct / 100)) * ARC_CIRCUMFERENCE;
+  arc.setAttribute("stroke-dasharray", `${filled.toFixed(1)} ${ARC_CIRCUMFERENCE.toFixed(1)}`);
+}
+
+// ---------- settings + top strip ----------
 function renderSettings(settings) {
   document.querySelectorAll("[data-risk]").forEach((button) => {
     button.classList.toggle("selected", Number(button.dataset.risk) === settings.riskPerTradeAmount);
@@ -74,6 +129,20 @@ function renderSettings(settings) {
   $("streakBoost").checked = settings.streakAlertEnabled;
   $("riskDisplay").textContent = `$${settings.riskPerTradeAmount}`;
   $("startStop").textContent = settings.automationRunning ? "STOP AUTOMATION" : "START AUTOMATION";
+
+  const auto = settings.automationMode === "automatic";
+  $("autopilot").checked = auto;
+  $("autopilotState").textContent = auto ? "EXECUTING WITHOUT CONFIRMATION" : "CONFIRM BEFORE EVERY TRADE";
+  $("autopilotHint").textContent = auto
+    ? "GreenBrain places approved trades immediately. You still control risk per trade, style, and daily limits."
+    : "GreenBrain will show you every approved trade and wait for your confirmation before it executes anything.";
+}
+
+function renderBrokerChip(broker) {
+  const chip = $("brokerChip");
+  if (broker.usingRealMt5) chip.textContent = "MT5 LIVE (PULL)";
+  else if (broker.pushModeEnabled) chip.textContent = "MT5 LIVE (EA)";
+  else chip.textContent = "PAPER SIM";
 }
 
 function renderMarketMemory(memory) {
@@ -110,21 +179,51 @@ function renderHistory(history) {
   $("historySummary").textContent = history.length ? `${history.length} recent trades monitored` : "Monitoring every decision";
 }
 
-function renderLog(entries) {
-  $("log").innerHTML = "";
-  entries
-    .slice(0, 8)
-    .reverse()
-    .forEach((entry) => log(entry));
-}
-
 function systemStateClass(state) {
   if (state === "HALTED") return "negative";
-  if (state === "RISK-REVIEW") return "";
+  if (state === "RISK-REVIEW") return "caution";
   return "safe";
 }
 
+// ---------- annunciator / master caution ----------
+function showAlert(title, text, options = {}) {
+  $("alertTitle").textContent = title;
+  $("alertText").textContent = text;
+  $("alert").classList.remove("hidden");
+  $("alertAction").classList.toggle("hidden", !options.actionLabel);
+  if (options.actionLabel) {
+    $("alertAction").textContent = options.actionLabel;
+    $("alertAction").classList.toggle("go", Boolean(options.actionIsGo));
+  }
+  $("alertDismiss").classList.toggle("hidden", !options.showDismiss);
+  $("pendingDetail").classList.toggle("hidden", !options.pending);
+}
+
+function hideAlert() {
+  $("alert").classList.add("hidden");
+}
+
+function renderPendingDetail(pending) {
+  $("pendingSide").textContent = pending.side;
+  $("pendingEntry").textContent = pending.entry.toFixed(5);
+  $("pendingStop").textContent = pending.stopLoss.toFixed(5);
+  $("pendingTarget").textContent = pending.takeProfit.toFixed(5);
+  $("pendingRisk").textContent = `$${pending.riskAmount.toFixed(2)}`;
+  const secondsLeft = Math.max(0, Math.round((pending.expiresAtMs - Date.now()) / 1000));
+  $("pendingTimer").textContent = `${secondsLeft}s`;
+}
+
 function renderAlerts(telemetry) {
+  if (telemetry.pendingDecision) {
+    renderPendingDetail(telemetry.pendingDecision);
+    showAlert(
+      "CONFIRMATION REQUIRED",
+      `GreenBrain wants to ${telemetry.pendingDecision.side} ${telemetry.pendingDecision.confidencePct}% confidence.`,
+      { pending: true, actionLabel: "CONFIRM", actionIsGo: true, showDismiss: true },
+    );
+    return;
+  }
+
   const topRow = telemetry.history[0];
   const topKey = topRow ? `${topRow.timeIso}:${topRow.result}` : null;
   if (topKey && topKey !== lastTopHistoryKey) {
@@ -145,11 +244,13 @@ function renderAlerts(telemetry) {
   const advice = telemetry.riskAdvice;
   if (advice && advice.requiresUserConfirmation) {
     if (advice.state === "review-increase") {
-      showAlert("GREEN STREAK", `${advice.reason} Suggested risk: $${advice.suggestedRiskAmount.toFixed(0)}.`, true);
+      showAlert("GREEN STREAK", `${advice.reason} Suggested risk: $${advice.suggestedRiskAmount.toFixed(0)}.`, {
+        actionLabel: "REVIEW RISK",
+      });
       return;
     }
     if (advice.state === "reduce") {
-      showAlert("RISK REVIEW", advice.reason, true);
+      showAlert("RISK REVIEW", advice.reason, { actionLabel: "REVIEW RISK" });
       return;
     }
   }
@@ -161,15 +262,17 @@ function renderAlerts(telemetry) {
   hideAlert();
 }
 
+// ---------- main render ----------
 function render(state) {
   const { settings, telemetry } = state;
   renderSettings(settings);
+  renderBrokerChip(telemetry.broker);
 
-  $("watchStatus").textContent = telemetry.halted ? "EMERGENCY STOP" : telemetry.running ? "WATCHING MARKETS" : "PAUSED";
-  $("decision").textContent = telemetry.decision;
-  $("confidence").textContent = `${telemetry.confidencePct}%`;
+  $("watchStatus").textContent = telemetry.halted ? "EMERGENCY STOP" : telemetry.running ? "WATCHING MARKETS" : "STANDING BY";
   $("reason").textContent = telemetry.reason;
-  $("marketState").textContent = telemetry.decision === "BUY" || telemetry.decision === "SELL" ? "OPPORTUNITY" : "SCANNING";
+  $("marketState").textContent = telemetry.decision === "BUY" || telemetry.decision === "SELL" ? "OPPORTUNITY" : telemetry.decision === "PENDING" ? "AWAITING CLEARANCE" : "SCANNING";
+
+  renderGauge(telemetry);
 
   $("todayProfit").textContent = money(telemetry.today.profit);
   $("todayProfit").className = telemetry.today.profit > 0 ? "positive" : telemetry.today.profit < 0 ? "negative" : "";
@@ -185,7 +288,7 @@ function render(state) {
       : "Waiting for results";
 
   const systemState = $("systemState");
-  systemState.textContent = telemetry.systemState;
+  systemState.textContent = SYSTEM_COPY[telemetry.systemState] || telemetry.systemState;
   systemState.className = systemStateClass(telemetry.systemState);
 
   renderMarketMemory(telemetry.marketMemory);
@@ -217,6 +320,7 @@ async function updateSettings(patch, description) {
   }
 }
 
+// ---------- controls ----------
 document.querySelectorAll("[data-risk]").forEach((button) => {
   button.addEventListener("click", () => {
     const amount = Number(button.dataset.risk);
@@ -240,8 +344,36 @@ $("streakBoost").addEventListener("change", () => {
   updateSettings({ streakAlertEnabled: $("streakBoost").checked });
 });
 
-$("alertAction").addEventListener("click", () => {
-  document.querySelector(".control").scrollIntoView({ behavior: "smooth" });
+$("autopilot").addEventListener("change", () => {
+  const enabling = $("autopilot").checked;
+  updateSettings(
+    { automationMode: enabling ? "automatic" : "assisted" },
+    enabling ? "AUTOPILOT ENABLED - trades will execute without confirmation" : "Autopilot disabled - trades now require confirmation",
+  );
+});
+
+$("alertAction").addEventListener("click", async () => {
+  if ($("pendingDetail").classList.contains("hidden")) {
+    document.querySelector(".control-deck").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+  try {
+    await apiPost("/api/confirm-trade");
+    log("Trade confirmed");
+    await refresh();
+  } catch (error) {
+    log(`Could not confirm trade: ${error.message}`);
+  }
+});
+
+$("alertDismiss").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/dismiss-trade");
+    log("Trade dismissed");
+    await refresh();
+  } catch (error) {
+    log(`Could not dismiss trade: ${error.message}`);
+  }
 });
 
 $("startStop").addEventListener("click", async () => {
@@ -256,7 +388,22 @@ $("startStop").addEventListener("click", async () => {
   }
 });
 
+// Guarded emergency stop: first click lifts the cover, second click (within
+// 4s) actually engages it - mirrors a real guarded aircraft switch and
+// prevents an accidental single-tap stop.
 $("emergency").addEventListener("click", async () => {
+  if (!emergencyGuardLifted) {
+    emergencyGuardLifted = true;
+    $("emergency").classList.add("lifted");
+    emergencyGuardTimer = setTimeout(() => {
+      emergencyGuardLifted = false;
+      $("emergency").classList.remove("lifted");
+    }, 4000);
+    return;
+  }
+  clearTimeout(emergencyGuardTimer);
+  emergencyGuardLifted = false;
+  $("emergency").classList.remove("lifted");
   try {
     await apiPost("/api/emergency-stop");
     log("EMERGENCY STOP ENGAGED");

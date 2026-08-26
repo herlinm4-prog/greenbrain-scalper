@@ -71,6 +71,18 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/confirm-trade") {
+      const result = await service.confirmPendingTrade();
+      sendJson(res, result.confirmed ? 200 : 400, result);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/dismiss-trade") {
+      const result = service.dismissPendingTrade();
+      sendJson(res, 200, result);
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/mt5/evaluate") {
       const body = (await readJson(req)) as Parameters<GreenBrainService["evaluateExternalTick"]>[0];
       try {

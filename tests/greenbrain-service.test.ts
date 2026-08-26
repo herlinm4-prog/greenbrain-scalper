@@ -88,6 +88,105 @@ describe("GreenBrainService", () => {
     expect(telemetry.feedHealth.status).toBe("healthy");
   });
 
+  it("defaults to assisted mode (no silent autopilot)", async () => {
+    const service = await GreenBrainService.create({ seed: 50 });
+    expect(service.getSettings().automationMode).toBe("assisted");
+  });
+
+  it("assisted mode holds an approved decision for confirmation instead of executing it", async () => {
+    const service = await GreenBrainService.create({ seed: 51 });
+    await service.updateSettings({ style: "aggressive" });
+    let sawPending = false;
+    for (let i = 0; i < 60 && !sawPending; i += 1) {
+      await service.tick(Date.now() + i * 1_200);
+      if (service.getTelemetry().decision === "PENDING") sawPending = true;
+    }
+    expect(sawPending).toBe(true);
+    const telemetry = service.getTelemetry();
+    expect(telemetry.pendingDecision).toBeDefined();
+    expect(telemetry.account.openPositions).toBe(0);
+  });
+
+  it("confirming a pending decision executes it", async () => {
+    const service = await GreenBrainService.create({ seed: 51 });
+    await service.updateSettings({ style: "aggressive" });
+    for (let i = 0; i < 60 && service.getTelemetry().decision !== "PENDING"; i += 1) {
+      await service.tick(Date.now() + i * 1_200);
+    }
+    expect(service.getTelemetry().decision).toBe("PENDING");
+
+    const result = await service.confirmPendingTrade();
+    expect(result.confirmed).toBe(true);
+    const telemetry = service.getTelemetry();
+    expect(telemetry.account.openPositions).toBe(1);
+    expect(telemetry.pendingDecision).toBeUndefined();
+    expect(["BUY", "SELL"]).toContain(telemetry.decision);
+  });
+
+  it("dismissing a pending decision cancels it without executing", async () => {
+    const service = await GreenBrainService.create({ seed: 51 });
+    await service.updateSettings({ style: "aggressive" });
+    for (let i = 0; i < 60 && service.getTelemetry().decision !== "PENDING"; i += 1) {
+      await service.tick(Date.now() + i * 1_200);
+    }
+    expect(service.getTelemetry().decision).toBe("PENDING");
+
+    const result = service.dismissPendingTrade();
+    expect(result.dismissed).toBe(true);
+    const telemetry = service.getTelemetry();
+    expect(telemetry.account.openPositions).toBe(0);
+    expect(telemetry.pendingDecision).toBeUndefined();
+    expect(telemetry.decision).toBe("WAIT");
+  });
+
+  it("confirming or dismissing with nothing pending is a safe no-op", async () => {
+    const service = await GreenBrainService.create({ seed: 52 });
+    const confirmResult = await service.confirmPendingTrade();
+    expect(confirmResult.confirmed).toBe(false);
+    const dismissResult = service.dismissPendingTrade();
+    expect(dismissResult.dismissed).toBe(false);
+  });
+
+  it("an unconfirmed decision auto-expires and GreenBrain resumes scanning", async () => {
+    const service = await GreenBrainService.create({ seed: 51 });
+    await service.updateSettings({ style: "aggressive" });
+    let pendingAtMs = 0;
+    let originalDecisionId = "";
+    for (let i = 0; i < 60; i += 1) {
+      const nowMs = Date.now() + i * 1_200;
+      await service.tick(nowMs);
+      const telemetry = service.getTelemetry();
+      if (telemetry.decision === "PENDING") {
+        pendingAtMs = nowMs;
+        originalDecisionId = telemetry.pendingDecision!.decisionId;
+        break;
+      }
+    }
+    expect(pendingAtMs).toBeGreaterThan(0);
+
+    // Jump far past the confirmation window without confirming. GreenBrain
+    // should discard the stale decision and resume scanning - it may
+    // immediately find and hold a *new* opportunity, which is fine; what
+    // must never happen is the original stale decision silently executing
+    // or lingering forever.
+    await service.tick(pendingAtMs + 120_000);
+    const telemetry = service.getTelemetry();
+    expect(telemetry.pendingDecision?.decisionId).not.toBe(originalDecisionId);
+    expect(telemetry.account.openPositions).toBe(0);
+  });
+
+  it("automatic mode (explicit opt-in) still executes approved decisions directly", async () => {
+    const service = await GreenBrainService.create({ seed: 51 });
+    await service.updateSettings({ automationMode: "automatic", style: "aggressive" });
+    let executed = false;
+    for (let i = 0; i < 60 && !executed; i += 1) {
+      await service.tick(Date.now() + i * 1_200);
+      if (service.getTelemetry().account.openPositions === 1) executed = true;
+    }
+    expect(executed).toBe(true);
+    expect(service.getTelemetry().pendingDecision).toBeUndefined();
+  });
+
   it("never opens more than one position and keeps daily P/L finite over many ticks", async () => {
     const service = await GreenBrainService.create({ seed: 42 });
     await runTicks(service, 250);

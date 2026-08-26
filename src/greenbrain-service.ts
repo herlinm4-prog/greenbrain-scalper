@@ -27,7 +27,8 @@ import {
   type GreenBrainSettings,
   type SettingsPersistence,
 } from "./settings-store.js";
-import type { AccountState, MarketSnapshot } from "./domain.js";
+import type { AccountState, MarketSnapshot, SignalProposal } from "./domain.js";
+import type { EngineDecision } from "./trading-engine.js";
 import type { GreenBrainDecisionLabel, GreenBrainTelemetry, TelemetryHistoryRow } from "./telemetry.js";
 
 const SYMBOL = "EURUSD";
@@ -37,6 +38,8 @@ const MAX_BARS = 60;
 const MAX_HISTORY_ROWS = 20;
 const MAX_LOG_LINES = 30;
 const MAX_RECENT_RESULTS = 20;
+/** How long an assisted-mode decision waits for the customer's confirm/dismiss before auto-expiring. */
+const CONFIRMATION_TIMEOUT_MS = 60_000;
 /**
  * Standard forex contract size. Correct for EURUSD with a USD account
  * currency, which is what this codebase hardcodes today - documented here
@@ -114,6 +117,20 @@ export class GreenBrainService {
     { symbol: string; side: "buy" | "sell"; entryPrice: number; stopLoss: number; takeProfit: number; volumeLots: number; openedAtMs: number }
   >();
 
+  /** Set when automationMode is "assisted" and a decision is approved but not yet confirmed. */
+  private pendingConfirmation:
+    | {
+        source: "internal" | "mt5-push";
+        decisionId: string;
+        proposal: SignalProposal;
+        decision: EngineDecision;
+        createdAtMs: number;
+        expiresAtMs: number;
+      }
+    | undefined;
+  /** Set once the customer confirms a push-mode decision; consumed by the EA's next evaluate() call. */
+  private armedPushDecision: { decisionId: string; proposal: SignalProposal; decision: EngineDecision; armedAtMs: number } | undefined;
+
   private constructor(config: GreenBrainServiceConfig) {
     this.mt5PushAllowlist = config.mt5PushAllowlist;
     this.usingInjectedBroker = config.broker !== undefined;
@@ -178,6 +195,86 @@ export class GreenBrainService {
   }
 
   /**
+   * Confirms the decision currently awaiting the customer's approval
+   * (assisted automation mode). For the paper/pull-MT5 broker path this
+   * re-checks the decision against fresh market/account state before
+   * executing (GreenBrainCore.confirmAssisted already does this) - a
+   * confirmation never blindly executes a stale decision. For MQL5 push
+   * mode, it arms the decision for the EA's next check-in.
+   */
+  async confirmPendingTrade(): Promise<{ confirmed: boolean; reason: string }> {
+    const pending = this.pendingConfirmation;
+    if (!pending) return { confirmed: false, reason: "There is no decision awaiting confirmation" };
+    this.pendingConfirmation = undefined;
+
+    if (pending.source === "mt5-push") {
+      this.armedPushDecision = { decisionId: pending.decisionId, proposal: pending.proposal, decision: pending.decision, armedAtMs: Date.now() };
+      this.appendLog(`Trade confirmed - armed for MT5's next check-in (${pending.decisionId})`);
+      return { confirmed: true, reason: "Armed for the next MT5 check-in" };
+    }
+
+    const nowMs = Date.now();
+    const settings = this.settingsStore.get();
+    try {
+      const freshSnapshot = await this.broker.getSnapshot(SYMBOL, nowMs);
+      const feedHealth = this.watchdog.evaluate(freshSnapshot.timestampMs, nowMs);
+      const core = new GreenBrainCore(this.engine, this.execution, this.journal);
+      const receipt = await core.confirmAssisted({
+        tradingMode: "demo",
+        policy: riskPolicyFor(settings),
+        account: this.account,
+        market: freshSnapshot,
+        proposal: pending.proposal,
+        timestampMs: nowMs,
+        ...(this.historicalContext !== undefined ? { historicalContext: this.historicalContext } : {}),
+        feedHealth,
+      });
+      this.lastDecision = pending.proposal.side === "buy" ? "BUY" : "SELL";
+      this.lastReason = "Confirmed by customer and executed.";
+      this.account.openPositions += 1;
+      this.appendLog(`${this.lastDecision} confirmed and opened - ticket-equivalent ${receipt.orderId} (${pending.decisionId})`);
+      return { confirmed: true, reason: this.lastReason };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Confirmation failed on re-check";
+      this.lastDecision = "WAIT";
+      this.lastReason = `Confirmation failed: ${reason} (conditions likely changed since the decision was proposed)`;
+      this.appendLog(this.lastReason);
+      this.experience.recordRejection({
+        id: `reject-confirm-${pending.decisionId}`,
+        opportunityId: pending.proposal.id,
+        strategyId: this.strategyId,
+        symbol: pending.proposal.symbol,
+        regime: this.historicalContext?.trend ?? "unknown",
+        rejectedAtMs: nowMs,
+        reason,
+        outOfSample: false,
+      });
+      return { confirmed: false, reason: this.lastReason };
+    }
+  }
+
+  /** Dismisses the decision currently awaiting confirmation without executing it. */
+  dismissPendingTrade(): { dismissed: boolean } {
+    const pending = this.pendingConfirmation;
+    if (!pending) return { dismissed: false };
+    this.pendingConfirmation = undefined;
+    this.lastDecision = "WAIT";
+    this.lastReason = "The proposed trade was dismissed by the customer.";
+    this.appendLog(`Trade dismissed by customer (${pending.decisionId})`);
+    this.experience.recordRejection({
+      id: `reject-dismiss-${pending.decisionId}`,
+      opportunityId: pending.proposal.id,
+      strategyId: this.strategyId,
+      symbol: pending.proposal.symbol,
+      regime: this.historicalContext?.trend ?? "unknown",
+      rejectedAtMs: Date.now(),
+      reason: "Dismissed by customer",
+      outOfSample: false,
+    });
+    return { dismissed: true };
+  }
+
+  /**
    * MQL5 push-mode entry point. An Expert Advisor running inside a real MT5
    * terminal calls this on every evaluation tick instead of GreenBrain
    * pulling data through a Python bridge. Runs the exact same intelligence
@@ -218,6 +315,33 @@ export class GreenBrainService {
 
     if (this.halted || !settings.automationRunning) {
       return this.pushWait(decisionId, this.halted ? "Emergency stop is engaged" : "Automation is paused");
+    }
+
+    this.expirePendingConfirmationIfStale(nowMs);
+
+    // A previously confirmed decision is waiting to be handed to the EA.
+    if (this.armedPushDecision && input.openPositions < 1) {
+      const armed = this.armedPushDecision;
+      this.armedPushDecision = undefined;
+      this.lastDecision = armed.proposal.side === "buy" ? "BUY" : "SELL";
+      this.lastReason = `${armed.decision.reason} (confirmed by customer)`;
+      this.appendLog(`Confirmed ${this.lastDecision} handed to MT5 - risk $${armed.decision.risk.riskAmount.toFixed(2)} (${armed.decisionId})`);
+      return {
+        decisionId: armed.decisionId,
+        action: armed.proposal.side,
+        reason: this.lastReason,
+        confidencePct: this.lastConfidencePct,
+        entry: armed.proposal.entry,
+        stopLoss: armed.proposal.stopLoss,
+        takeProfit: armed.proposal.takeProfit,
+        riskAmount: armed.decision.risk.riskAmount,
+      };
+    }
+
+    if (this.pendingConfirmation) {
+      this.lastDecision = "PENDING";
+      this.lastReason = `Awaiting your confirmation to ${this.pendingConfirmation.proposal.side.toUpperCase()} - confirm or dismiss before it expires.`;
+      return { decisionId, action: "wait", reason: this.lastReason, confidencePct: this.lastConfidencePct };
     }
 
     const feedHealth = this.watchdog.evaluate(input.timestampMs, nowMs);
@@ -271,6 +395,21 @@ export class GreenBrainService {
         outOfSample: false,
       });
       return this.pushWait(decisionId, decision.reason);
+    }
+
+    if (settings.automationMode === "assisted") {
+      this.pendingConfirmation = {
+        source: "mt5-push",
+        decisionId,
+        proposal,
+        decision,
+        createdAtMs: nowMs,
+        expiresAtMs: nowMs + CONFIRMATION_TIMEOUT_MS,
+      };
+      this.lastDecision = "PENDING";
+      this.lastReason = `${proposal.side.toUpperCase()} approved (confidence ${this.lastConfidencePct}%) - waiting for your confirmation.`;
+      this.appendLog(`Awaiting confirmation to ${proposal.side.toUpperCase()} on MT5 - risk $${decision.risk.riskAmount.toFixed(2)} (${decisionId})`);
+      return { decisionId, action: "wait", reason: this.lastReason, confidencePct: this.lastConfidencePct };
     }
 
     this.lastDecision = proposal.side === "buy" ? "BUY" : "SELL";
@@ -393,6 +532,26 @@ export class GreenBrainService {
     }
   }
 
+  /** Returns true if a pending confirmation existed and was just expired/dismissed. */
+  private expirePendingConfirmationIfStale(nowMs: number): boolean {
+    if (!this.pendingConfirmation) return false;
+    if (nowMs < this.pendingConfirmation.expiresAtMs) return false;
+    const pending = this.pendingConfirmation;
+    this.pendingConfirmation = undefined;
+    this.appendLog(`Pending ${pending.proposal.side.toUpperCase()} decision expired unconfirmed and was dismissed (${pending.decisionId})`);
+    this.experience.recordRejection({
+      id: `reject-expired-${pending.decisionId}`,
+      opportunityId: pending.proposal.id,
+      strategyId: this.strategyId,
+      symbol: pending.proposal.symbol,
+      regime: this.historicalContext?.trend ?? "unknown",
+      rejectedAtMs: nowMs,
+      reason: "Confirmation window expired",
+      outOfSample: false,
+    });
+    return true;
+  }
+
   addKnowledge(source: KnowledgeSource, item: KnowledgeItem): void {
     this.knowledgeBase.addSource(source);
     this.knowledgeBase.addItem(item);
@@ -410,6 +569,16 @@ export class GreenBrainService {
   async tick(nowMs: number): Promise<void> {
     const settings = this.settingsStore.get();
     if (this.halted || !settings.automationRunning) return;
+
+    if (this.expirePendingConfirmationIfStale(nowMs)) {
+      this.lastDecision = "WAIT";
+      this.lastReason = "The previous decision expired unconfirmed and was dismissed.";
+    }
+    if (this.pendingConfirmation) {
+      this.lastDecision = "PENDING";
+      this.lastReason = `Awaiting your confirmation to ${this.pendingConfirmation.proposal.side.toUpperCase()} - confirm or dismiss before it expires.`;
+      return;
+    }
 
     const heartbeatError = await this.refreshBrokerHeartbeat(nowMs);
     if (heartbeatError) {
@@ -477,7 +646,7 @@ export class GreenBrainService {
     const core = new GreenBrainCore(this.engine, this.execution, this.journal);
     const result = await core.processSignal({
       tradingMode: "demo",
-      automationMode: "automatic",
+      automationMode: settings.automationMode,
       policy,
       account: this.account,
       market: snapshot,
@@ -500,6 +669,22 @@ export class GreenBrainService {
         reason: result.decision.reason,
         outOfSample: false,
       });
+      return;
+    }
+
+    if (result.executionStatus === "awaiting-confirmation") {
+      const decisionId = `confirm-${proposal.id}`;
+      this.pendingConfirmation = {
+        source: "internal",
+        decisionId,
+        proposal,
+        decision: result.decision,
+        createdAtMs: nowMs,
+        expiresAtMs: nowMs + CONFIRMATION_TIMEOUT_MS,
+      };
+      this.lastDecision = "PENDING";
+      this.lastReason = `${proposal.side.toUpperCase()} approved (confidence ${this.lastConfidencePct}%) - waiting for your confirmation.`;
+      this.appendLog(`Awaiting confirmation to ${proposal.side.toUpperCase()} - risk $${result.decision.risk.riskAmount.toFixed(2)} (${decisionId})`);
       return;
     }
 
@@ -548,6 +733,19 @@ export class GreenBrainService {
       systemState,
       broker: { id: this.broker.id, usingRealMt5: this.usingInjectedBroker, pushModeEnabled: this.mt5PushAllowlist !== undefined },
       feedHealth,
+      pendingDecision: this.pendingConfirmation
+        ? {
+            decisionId: this.pendingConfirmation.decisionId,
+            side: this.pendingConfirmation.proposal.side === "buy" ? "BUY" : "SELL",
+            entry: this.pendingConfirmation.proposal.entry,
+            stopLoss: this.pendingConfirmation.proposal.stopLoss,
+            takeProfit: this.pendingConfirmation.proposal.takeProfit,
+            riskAmount: this.pendingConfirmation.decision.risk.riskAmount,
+            confidencePct: this.lastConfidencePct,
+            reason: this.pendingConfirmation.decision.reason,
+            expiresAtMs: this.pendingConfirmation.expiresAtMs,
+          }
+        : undefined,
       market: this.lastMarket
         ? {
             symbol: this.lastMarket.symbol,
@@ -844,6 +1042,9 @@ function describeSettingsChange(previous: GreenBrainSettings, next: GreenBrainSe
   }
   if (previous.automationRunning !== next.automationRunning) {
     changes.push(next.automationRunning ? "automation resumed" : "automation paused");
+  }
+  if (previous.automationMode !== next.automationMode) {
+    changes.push(next.automationMode === "automatic" ? "AUTOPILOT ENABLED - trades will execute without confirmation" : "autopilot disabled - trades now require confirmation");
   }
   return changes.length ? `Settings updated: ${changes.join(", ")}` : "Settings updated";
 }

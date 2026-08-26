@@ -8,8 +8,20 @@ export interface TelemetryHistoryRow {
   result: number;
 }
 
-export type GreenBrainDecisionLabel = "BUY" | "SELL" | "WAIT" | "HALTED";
+export type GreenBrainDecisionLabel = "BUY" | "SELL" | "WAIT" | "PENDING" | "HALTED";
 export type GreenBrainSystemState = "PROTECTED" | "PAUSED" | "HALTED" | "RISK-REVIEW";
+
+export interface TelemetryPendingDecision {
+  decisionId: string;
+  side: "BUY" | "SELL";
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskAmount: number;
+  confidencePct: number;
+  reason: string;
+  expiresAtMs: number;
+}
 
 export interface GreenBrainTelemetry {
   timestampMs: number;
@@ -18,6 +30,7 @@ export interface GreenBrainTelemetry {
   systemState: GreenBrainSystemState;
   broker: { id: string; usingRealMt5: boolean; pushModeEnabled: boolean };
   feedHealth: FeedHealthReport;
+  pendingDecision: TelemetryPendingDecision | undefined;
   market: { symbol: string; bid: number; ask: number; mid: number } | undefined;
   decision: GreenBrainDecisionLabel;
   confidencePct: number;

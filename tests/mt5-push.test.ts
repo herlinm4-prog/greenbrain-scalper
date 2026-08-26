@@ -62,6 +62,51 @@ describe("GreenBrainService MT5 push mode", () => {
     expect(decision.decisionId).toBeTruthy();
   });
 
+  it("assisted mode holds the decision, and confirming arms it for the EA's next check-in", async () => {
+    const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
+    await service.updateSettings({ style: "aggressive" });
+
+    let mid = 1.1;
+    for (let i = 0; i < 60; i += 1) {
+      mid += 0.0003; // steady upward drift so the momentum generator has a clear buy signal
+      await service.evaluateExternalTick(
+        snapshot({ bid: mid - 0.0001, ask: mid + 0.0001, timestampMs: Date.now() + i * 1_200 }),
+      );
+      if (service.getTelemetry().decision === "PENDING") break;
+    }
+    expect(service.getTelemetry().decision).toBe("PENDING");
+    expect(service.getTelemetry().pendingDecision).toBeDefined();
+
+    const confirmResult = await service.confirmPendingTrade();
+    expect(confirmResult.confirmed).toBe(true);
+    expect(service.getTelemetry().pendingDecision).toBeUndefined();
+
+    // The EA's next check-in should now receive the armed action directly,
+    // without a fresh evaluation cycle.
+    const armed = await service.evaluateExternalTick(snapshot({ bid: mid - 0.0001, ask: mid + 0.0001, timestampMs: Date.now() + 100_000 }));
+    expect(["buy", "sell"]).toContain(armed.action);
+    expect(armed.reason).toMatch(/confirmed by customer/);
+  });
+
+  it("dismissing a push-mode pending decision cancels it, EA gets wait next", async () => {
+    const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
+    await service.updateSettings({ style: "aggressive" });
+
+    let mid = 1.1;
+    for (let i = 0; i < 60; i += 1) {
+      mid += 0.0003;
+      await service.evaluateExternalTick(
+        snapshot({ bid: mid - 0.0001, ask: mid + 0.0001, timestampMs: Date.now() + i * 1_200 }),
+      );
+      if (service.getTelemetry().decision === "PENDING") break;
+    }
+    expect(service.getTelemetry().decision).toBe("PENDING");
+
+    const result = service.dismissPendingTrade();
+    expect(result.dismissed).toBe(true);
+    expect(service.getTelemetry().pendingDecision).toBeUndefined();
+  });
+
   it("full lifecycle: fill report opens a position, close report journals the real outcome", async () => {
     const service = await GreenBrainService.create({ mt5PushAllowlist: ALLOWLIST });
     const now = Date.now();

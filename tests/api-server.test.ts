@@ -154,6 +154,20 @@ describe("GreenBrain API server - MT5 push mode", () => {
     expect(body.error).toMatch(/not allowlisted/);
   });
 
+  it("returns 400 from /api/confirm-trade when nothing is pending", async () => {
+    const response = await fetch(`${baseUrl}/api/confirm-trade`, { method: "POST" });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.confirmed).toBe(false);
+  });
+
+  it("returns 200 from /api/dismiss-trade even when nothing is pending", async () => {
+    const response = await fetch(`${baseUrl}/api/dismiss-trade`, { method: "POST" });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.dismissed).toBe(false);
+  });
+
   it("full report-fill / report-close round trip over HTTP", async () => {
     const now = Date.now();
     const fillResponse = await fetch(`${baseUrl}/api/mt5/report-fill`, {

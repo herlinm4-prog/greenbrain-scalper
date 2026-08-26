@@ -1,6 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
+import type { AutomationMode } from "./greenbrain-core.js";
 
 export type TradingStyle = "safe" | "balanced" | "aggressive";
+export type { AutomationMode };
 
 export interface GreenBrainSettings {
   riskPerTradeAmount: number;
@@ -9,6 +11,16 @@ export interface GreenBrainSettings {
   dailyLossLimit: number;
   streakAlertEnabled: boolean;
   automationRunning: boolean;
+  /**
+   * "assisted" (default, safer): GreenBrain generates and approves a
+   * decision but waits for an explicit confirm-trade call before any order
+   * is placed - in paper/pull-MT5 mode that means execution is held, and
+   * in MQL5 push mode the EA is told to wait until confirmed.
+   * "automatic" (autopilot): approved decisions execute immediately with
+   * no further confirmation. This is an explicit, visible customer choice,
+   * never a silent default.
+   */
+  automationMode: AutomationMode;
 }
 
 export interface SettingsPatch {
@@ -18,9 +30,11 @@ export interface SettingsPatch {
   dailyLossLimit?: number;
   streakAlertEnabled?: boolean;
   automationRunning?: boolean;
+  automationMode?: AutomationMode;
 }
 
 export const TRADING_STYLES: TradingStyle[] = ["safe", "balanced", "aggressive"];
+export const AUTOMATION_MODES: AutomationMode[] = ["assisted", "automatic"];
 
 export const DEFAULT_SETTINGS: GreenBrainSettings = {
   riskPerTradeAmount: 25,
@@ -29,6 +43,7 @@ export const DEFAULT_SETTINGS: GreenBrainSettings = {
   dailyLossLimit: 50,
   streakAlertEnabled: true,
   automationRunning: true,
+  automationMode: "assisted",
 };
 
 export interface SettingsPersistence {
@@ -98,6 +113,9 @@ function sanitizePatch(input: unknown): SettingsPatch {
   if (typeof record.dailyLossLimit === "number") patch.dailyLossLimit = record.dailyLossLimit;
   if (typeof record.streakAlertEnabled === "boolean") patch.streakAlertEnabled = record.streakAlertEnabled;
   if (typeof record.automationRunning === "boolean") patch.automationRunning = record.automationRunning;
+  if (typeof record.automationMode === "string" && (AUTOMATION_MODES as string[]).includes(record.automationMode)) {
+    patch.automationMode = record.automationMode as AutomationMode;
+  }
   return patch;
 }
 
