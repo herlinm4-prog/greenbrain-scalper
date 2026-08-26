@@ -23,6 +23,15 @@ export interface TelemetryPendingDecision {
   expiresAtMs: number;
 }
 
+export interface TelemetryStrategyHealth {
+  classification: string;
+  sampleSize: number;
+  outOfSampleSize: number;
+  expectancyR: number;
+  probabilityOfPositiveEdge: number;
+  reasons: string[];
+}
+
 export interface GreenBrainTelemetry {
   timestampMs: number;
   running: boolean;
@@ -31,6 +40,7 @@ export interface GreenBrainTelemetry {
   broker: { id: string; usingRealMt5: boolean; pushModeEnabled: boolean };
   feedHealth: FeedHealthReport;
   pendingDecision: TelemetryPendingDecision | undefined;
+  strategyHealth: TelemetryStrategyHealth | undefined;
   market: { symbol: string; bid: number; ask: number; mid: number } | undefined;
   decision: GreenBrainDecisionLabel;
   confidencePct: number;

@@ -13,6 +13,9 @@ import { SessionProtection, type SessionProtectionState } from "./session-protec
 import { RiskAdvisor, type RiskAdvice } from "./risk-advisor.js";
 import { ExperienceLoop } from "./experience-loop.js";
 import { GreenBrainKnowledgeBase, type KnowledgeItem, type KnowledgeSource, type KnowledgeBrief } from "./knowledge-base.js";
+import { StrategyAttributionEngine, type AttributionPolicy, type StrategyAttribution, type StrategyTradeOutcome } from "./strategy-attribution.js";
+import { StrategyLibrary, type StrategyResearchDocument } from "./strategy-library.js";
+import { PatternDiscoveryRegistry, type PatternDiscovery } from "./pattern-discovery.js";
 import { MomentumSignalGenerator } from "./signal-generator.js";
 import { riskPolicyFor, engineConfigFor } from "./style-policy.js";
 import type {
@@ -47,6 +50,19 @@ const CONFIRMATION_TIMEOUT_MS = 60_000;
  * supporting other symbols or account currencies.
  */
 const UNITS_PER_LOT = 100_000;
+/** Trades before this count are treated as in-sample (used to derive the strategy); after, out-of-sample (used to test it). */
+const IN_SAMPLE_TRADE_COUNT = 20;
+const MAX_STRATEGY_OUTCOMES = 500;
+/** Same rigor bar used in tests/strategy-learning.test.ts - not loosened just to show "validated" sooner. */
+const ATTRIBUTION_POLICY: AttributionPolicy = {
+  minimumTrades: 30,
+  minimumOutOfSampleTrades: 10,
+  minimumProfitFactor: 1.2,
+  maximumDrawdownR: 8,
+  minimumPositiveRegimeFraction: 0.5,
+  baseConfidenceZ: 1.64,
+  testedCandidateCount: 5,
+};
 
 export interface GreenBrainServiceConfig {
   settingsPersistence?: SettingsPersistence;
@@ -84,6 +100,13 @@ export class GreenBrainService {
   private readonly knowledgeBase = new GreenBrainKnowledgeBase();
   private readonly signalGenerator: MomentumSignalGenerator;
   private readonly strategyId = "momentum-v1";
+  private readonly strategyAttributionEngine = new StrategyAttributionEngine();
+  private readonly strategyLibrary = new StrategyLibrary();
+  private readonly patternDiscovery = new PatternDiscoveryRegistry();
+  private readonly strategyOutcomes: StrategyTradeOutcome[] = [];
+  private strategyAttribution: StrategyAttribution | undefined;
+  private strategyDocVersion = 1;
+  private patternDiscoveryCount = 0;
 
   private settingsStore!: SettingsStore;
   private engine!: TradingEngine;
@@ -156,6 +179,7 @@ export class GreenBrainService {
       rewardToRisk: 1.6,
     });
     this.seedKnowledgeBase();
+    this.seedStrategyLibrary();
   }
 
   static async create(config: GreenBrainServiceConfig = {}): Promise<GreenBrainService> {
@@ -746,6 +770,17 @@ export class GreenBrainService {
             expiresAtMs: this.pendingConfirmation.expiresAtMs,
           }
         : undefined,
+      strategyHealth:
+        this.strategyAttribution && this.strategyOutcomes.length > 0
+          ? {
+              classification: this.strategyAttribution.classification,
+              sampleSize: this.strategyAttribution.sampleSize,
+              outOfSampleSize: this.strategyAttribution.outOfSampleSize,
+              expectancyR: Math.round(this.strategyAttribution.expectancyR * 100) / 100,
+              probabilityOfPositiveEdge: Math.round(this.strategyAttribution.probabilityOfPositiveEdge * 100) / 100,
+              reasons: this.strategyAttribution.reasons,
+            }
+          : undefined,
       market: this.lastMarket
         ? {
             symbol: this.lastMarket.symbol,
@@ -863,6 +898,7 @@ export class GreenBrainService {
     );
 
     const riskAmount = Math.max(0.01, Math.abs(position.entryPrice - position.stopLoss) * position.units);
+    const outOfSample = this.strategyOutcomes.length >= IN_SAMPLE_TRADE_COUNT;
     try {
       this.experience.recordExecution({
         id: `exec-${position.id}-${position.closedAtMs}`,
@@ -882,7 +918,7 @@ export class GreenBrainService {
         maximumAdversePnl: Math.min(0, position.realizedPnl),
         openedAtMs: position.openedAtMs,
         closedAtMs: position.closedAtMs!,
-        outOfSample: false,
+        outOfSample,
       });
     } catch (error) {
       // ExperienceLoop is memory/analytics, not the authoritative P/L record.
@@ -894,6 +930,15 @@ export class GreenBrainService {
       );
     }
 
+    this.recordStrategyOutcome({
+      id: `outcome-${position.id}-${position.closedAtMs}`,
+      strategyId: this.strategyId,
+      timestampMs: nowMs,
+      netReturnR: riskAmount > 0 ? position.realizedPnl / riskAmount : 0,
+      regime: this.historicalContext?.trend ?? "unknown",
+      outOfSample,
+    });
+
     void this.journal.recordPosition(position, nowMs);
   }
 
@@ -904,6 +949,109 @@ export class GreenBrainService {
       count += 1;
     }
     return count;
+  }
+
+  /**
+   * Records one closed trade's R-multiple outcome, re-runs the statistical
+   * attribution engine, and files a StrategyLibrary version whenever the
+   * evidence classification actually changes (StrategyLibrary has no
+   * update() by design - documents are versioned, never mutated - so this
+   * adds a new version rather than editing history). Also flags outsized
+   * outcomes as PatternDiscovery observations for later review; it never
+   * auto-promotes a discovery past "observation" - that requires a human
+   * or a future, explicitly reviewed test, matching the registry's own
+   * promotion gate.
+   */
+  private recordStrategyOutcome(outcome: StrategyTradeOutcome): void {
+    this.strategyOutcomes.push(outcome);
+    if (this.strategyOutcomes.length > MAX_STRATEGY_OUTCOMES) this.strategyOutcomes.shift();
+
+    if (Math.abs(outcome.netReturnR) >= 2) {
+      this.patternDiscoveryCount += 1;
+      const id = `discovery-${this.patternDiscoveryCount}-${outcome.timestampMs}`;
+      this.patternDiscovery.record({
+        id,
+        title: outcome.netReturnR > 0 ? "Outsized win relative to planned risk" : "Outsized loss relative to planned risk",
+        status: "observation",
+        detectedAtMs: outcome.timestampMs,
+        symbol: SYMBOL,
+        regime: outcome.regime,
+        description: `A closed trade returned ${outcome.netReturnR.toFixed(2)}R, well outside the strategy's typical planned risk-reward band.`,
+        whyUnusual: [`|R| = ${Math.abs(outcome.netReturnR).toFixed(2)} is more than double the planned reward-to-risk`],
+        supportingObservationIds: [outcome.id],
+        contradictingObservationIds: [],
+        plausibleMechanisms: ["Price gapped past the stop or target before settlement", "Volatility regime shifted mid-trade"],
+        requiredTests: ["Review the tick sequence around this trade", "Check whether this regime repeats the pattern"],
+        confidence: 0.3,
+      });
+      this.appendLog(`Pattern discovery logged: ${id}`);
+    }
+
+    const nextAttribution = this.strategyAttributionEngine.evaluate(this.strategyOutcomes, ATTRIBUTION_POLICY);
+    const currentDoc = this.strategyLibrary.get(`${this.strategyId}-v${this.strategyDocVersion}`);
+    const classificationChanged = !currentDoc || currentDoc.attribution.classification !== nextAttribution.classification;
+    this.strategyAttribution = nextAttribution;
+    if (classificationChanged) {
+      const previousId = currentDoc?.id;
+      this.strategyDocVersion += 1;
+      this.addStrategyVersion(nextAttribution, previousId);
+      this.appendLog(`Strategy research updated: ${this.strategyId} is now "${nextAttribution.classification}" (v${this.strategyDocVersion})`);
+    }
+  }
+
+  private addStrategyVersion(attribution: StrategyAttribution, parentId: string | undefined): void {
+    const status: StrategyResearchDocument["status"] = attribution.classification === "statistically-supported-edge" ? "validated" : "observation";
+    this.strategyLibrary.add({
+      id: `${this.strategyId}-v${this.strategyDocVersion}`,
+      name: "EURUSD Short-Term Momentum",
+      version: this.strategyDocVersion,
+      status,
+      hypothesis:
+        "Short-term price momentum over a small tick window persists long enough, net of a volatility-adjusted stop and spread, to produce a positive expectancy on EURUSD.",
+      discoveredPattern: "Directional continuation immediately following a short run of same-direction mid-price moves.",
+      instruments: [SYMBOL],
+      regimes: ["trending-up", "trending-down", "ranging", "unknown"],
+      entryLogic: ["Enter in the direction of the most recent short-window momentum once it clears the volatility floor"],
+      exitLogic: ["Volatility-adjusted stop loss", "Fixed reward-to-risk take profit"],
+      abstentionLogic: [
+        "No entry while a position is already open",
+        "No entry while session protection is pausing new trades",
+        "No entry while the historical-context gate rejects the setup",
+      ],
+      invalidationConditions: [
+        "Expectancy or out-of-sample expectancy turns non-positive",
+        "Profit factor or drawdown breach the attribution policy thresholds",
+      ],
+      riskAssumptions: ["Dollar risk per trade is fixed by customer settings, not by conviction"],
+      failureModes: ["Momentum reverses immediately after entry (whipsaw)", "Spread widens past the volatility-adjusted stop before fill"],
+      supportingEvidence: [`${attribution.sampleSize} recorded outcomes, ${attribution.outOfSampleSize} out-of-sample`],
+      contradictingEvidence: attribution.reasons,
+      attribution,
+      ...(parentId ? { parentVersionId: parentId } : {}),
+      createdAtMs: Date.now(),
+    });
+  }
+
+  private seedStrategyLibrary(): void {
+    const attribution = this.strategyAttributionEngine.evaluate([], ATTRIBUTION_POLICY);
+    this.strategyAttribution = attribution;
+    this.addStrategyVersion(attribution, undefined);
+  }
+
+  /** Full research state: current strategy document(s), latest attribution, and any logged pattern discoveries. */
+  getStrategyReport(): {
+    strategies: StrategyResearchDocument[];
+    attribution: StrategyAttribution | undefined;
+    discoveries: PatternDiscovery[];
+    markdown: string;
+  } {
+    const currentId = `${this.strategyId}-v${this.strategyDocVersion}`;
+    return {
+      strategies: this.strategyLibrary.all(),
+      attribution: this.strategyAttribution,
+      discoveries: this.patternDiscovery.all(),
+      markdown: this.strategyLibrary.get(currentId) ? this.strategyLibrary.toMarkdown(currentId) : "",
+    };
   }
 
   private appendLog(message: string): void {

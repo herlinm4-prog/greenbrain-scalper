@@ -32,3 +32,6 @@ export * from "./signal-generator.js";
 export * from "./greenbrain-service.js";
 export * from "./api-server.js";
 export * from "./mt5-push.js";
+export * from "./strategy-attribution.js";
+export * from "./strategy-library.js";
+export * from "./pattern-discovery.js";

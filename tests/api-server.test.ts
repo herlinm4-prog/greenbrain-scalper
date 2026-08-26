@@ -54,6 +54,15 @@ describe("GreenBrain API server", () => {
     expect(state.telemetry.systemState).toBe("HALTED");
   });
 
+  it("returns the strategy research report via GET /api/strategy", async () => {
+    const response = await fetch(`${baseUrl}/api/strategy`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(Array.isArray(body.strategies)).toBe(true);
+    expect(body.strategies.length).toBeGreaterThan(0);
+    expect(body.markdown).toContain("# EURUSD Short-Term Momentum");
+  });
+
   it("returns a knowledge brief via GET /api/knowledge", async () => {
     const response = await fetch(`${baseUrl}/api/knowledge`);
     expect(response.status).toBe(200);

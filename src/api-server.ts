@@ -116,6 +116,11 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/strategy") {
+      sendJson(res, 200, service.getStrategyReport());
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/knowledge") {
       const symbol = url.searchParams.get("symbol") ?? undefined;
       sendJson(res, 200, service.getKnowledgeBrief(symbol));
