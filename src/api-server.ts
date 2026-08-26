@@ -1,8 +1,15 @@
+import { timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, resolve } from "node:path";
-import { timingSafeEqual } from "node:crypto";
 import type { GreenBrainService } from "./greenbrain-service.js";
+
+export type GreenBrainRuntimeMode = "paper" | "mt5-bridge" | "mt5-push";
+
+export interface GreenBrainRuntimeInfo {
+  brokerMode: GreenBrainRuntimeMode;
+  environment: "demo";
+}
 
 export interface ApiServerConfig {
   port: number;
@@ -10,6 +17,7 @@ export interface ApiServerConfig {
   dashboardDir?: string;
   apiToken?: string;
   allowedOrigin?: string;
+  runtime?: GreenBrainRuntimeInfo;
 }
 
 export interface ApiServerHandle {
@@ -27,7 +35,7 @@ export function createApiServer(service: GreenBrainService, config: ApiServerCon
       res.end();
       return;
     }
-    void route(req, res, service, dashboardDir, config.apiToken);
+    void route(req, res, service, dashboardDir, config.apiToken, config.runtime);
   });
 
   return {
@@ -47,18 +55,30 @@ export function createApiServer(service: GreenBrainService, config: ApiServerCon
 }
 
 function setCors(res: ServerResponse, allowedOrigin?: string): void {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin ?? "*");
+  if (allowedOrigin) res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Vary", "Origin");
 }
 
-async function route(req: IncomingMessage, res: ServerResponse, service: GreenBrainService, dashboardDir: string, apiToken?: string): Promise<void> {
+async function route(
+  req: IncomingMessage,
+  res: ServerResponse,
+  service: GreenBrainService,
+  dashboardDir: string,
+  apiToken?: string,
+  runtime?: GreenBrainRuntimeInfo,
+): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
 
   try {
     if (req.method === "GET" && url.pathname === "/healthz") {
-      sendJson(res, 200, { status: "ok", service: "greenbrain", timestampMs: Date.now() });
+      sendJson(res, 200, {
+        status: "ok",
+        service: "greenbrain",
+        timestampMs: Date.now(),
+        ...(runtime ? { runtime } : {}),
+      });
       return;
     }
 
@@ -72,6 +92,7 @@ async function route(req: IncomingMessage, res: ServerResponse, service: GreenBr
         settings: service.getSettings(),
         telemetry: service.getTelemetry(),
         assisted: service.getAssistedExecutionState(),
+        runtime: runtime ?? { brokerMode: "paper", environment: "demo" },
       });
       return;
     }
@@ -192,10 +213,7 @@ function streamFile(res: ServerResponse, filePath: string): void {
     : extname(filePath) === ".js"
       ? "text/javascript; charset=utf-8"
       : "text/css; charset=utf-8";
-  res.writeHead(200, {
-    "Content-Type": contentType,
-    "Cache-Control": "no-store",
-  });
+  res.writeHead(200, { "Content-Type": contentType, "Cache-Control": "no-store" });
   const stream = createReadStream(filePath);
   stream.on("error", () => {
     if (!res.headersSent) sendJson(res, 500, { error: "Dashboard asset unavailable" });

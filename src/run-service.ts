@@ -1,6 +1,6 @@
 import path from "node:path";
 import { GreenBrainService } from "./greenbrain-service.js";
-import { createApiServer } from "./api-server.js";
+import { createApiServer, type GreenBrainRuntimeMode } from "./api-server.js";
 import { JsonFileSettingsPersistence } from "./settings-store.js";
 import { Mt5DemoAdapter } from "./mt5-bridge.js";
 import { Mt5HttpTransport } from "./mt5-http-transport.js";
@@ -12,19 +12,6 @@ const PORT = Number(process.env.GREENBRAIN_API_PORT ?? 8787);
 const API_TOKEN = process.env.GREENBRAIN_API_TOKEN;
 const DASHBOARD_ORIGIN = process.env.GREENBRAIN_DASHBOARD_ORIGIN;
 
-/**
- * Builds a real MT5 broker adapter when GREENBRAIN_BROKER=mt5 and the
- * required bridge environment variables are present. Every variable name
- * matches bridge/mt5_bridge.py exactly so the same values can be set on
- * both sides. Returns undefined (falling back to the safe paper/demo
- * simulator) when GREENBRAIN_BROKER is unset or "paper".
- *
- * This requires a real Windows machine or VPS running bridge/mt5_bridge.py
- * (the MetaTrader5 Python package is Windows-only). It never enables
- * live-money trading: Mt5DemoAdapter.initialize() hard-rejects any account
- * whose trade_mode is not "demo", and rejects any login/server that
- * doesn't match the allowlist below.
- */
 async function buildMt5PullBroker(): Promise<BrokerAdapter | undefined> {
   const mode = process.env.GREENBRAIN_BROKER ?? "paper";
   if (mode !== "mt5") return undefined;
@@ -43,38 +30,40 @@ async function buildMt5PullBroker(): Promise<BrokerAdapter | undefined> {
   );
 
   const account = await adapter.initialize();
-  // eslint-disable-next-line no-console
   console.log(
-    `Connected to real MT5 demo account ${account.login}@${account.server} ` +
+    `Connected to MT5 demo account ${account.login}@${account.server} ` +
       `(${account.broker}, equity ${account.equity} ${account.currency})`,
   );
   return adapter;
 }
 
-/**
- * Enables the MQL5 push integration when GREENBRAIN_MT5_PUSH_LOGIN and
- * GREENBRAIN_MT5_PUSH_SERVER are both set. This is the Mac-friendly path:
- * an Expert Advisor running inside the real MT5 terminal (even a
- * Mac-wrapped one, since the terminal itself is genuine MT5) calls
- * POST /api/mt5/evaluate, /report-fill, /report-close directly - no
- * Windows and no Python bridge required. When this is active, the internal
- * tick loop below is skipped: the EA's HTTP calls drive the service instead.
- */
 function buildMt5PushAllowlist(): Mt5PushAllowlist | undefined {
   const login = process.env.GREENBRAIN_MT5_PUSH_LOGIN;
   const server = process.env.GREENBRAIN_MT5_PUSH_SERVER;
   if (!login || !server) return undefined;
-  return { login: Number(login), server };
+  const parsedLogin = Number(login);
+  if (!Number.isFinite(parsedLogin) || parsedLogin <= 0) {
+    throw new Error("GREENBRAIN_MT5_PUSH_LOGIN must be a valid positive demo account login.");
+  }
+  return { login: parsedLogin, server };
 }
 
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) {
-    throw new Error(
-      `${name} is required when GREENBRAIN_BROKER=mt5. Set it to the same value used by bridge/mt5_bridge.py.`,
-    );
-  }
+  if (!value) throw new Error(`${name} is required for the selected MT5 connection mode.`);
   return value;
+}
+
+function runtimeMode(broker: BrokerAdapter | undefined, mt5PushAllowlist: Mt5PushAllowlist | undefined): GreenBrainRuntimeMode {
+  if (mt5PushAllowlist) return "mt5-push";
+  if (broker) return "mt5-bridge";
+  return "paper";
+}
+
+function runtimeLabel(mode: GreenBrainRuntimeMode): string {
+  if (mode === "mt5-push") return "MT5 PUSH · DEMO";
+  if (mode === "mt5-bridge") return "MT5 BRIDGE · DEMO";
+  return "PAPER ENGINE · DEMO";
 }
 
 async function main(): Promise<void> {
@@ -83,11 +72,10 @@ async function main(): Promise<void> {
   const mt5PushAllowlist = buildMt5PushAllowlist();
 
   if (broker && mt5PushAllowlist) {
-    throw new Error(
-      "Configure either GREENBRAIN_BROKER=mt5 (Windows bridge) or GREENBRAIN_MT5_PUSH_LOGIN/SERVER (MQL5 EA), not both.",
-    );
+    throw new Error("Configure only one MT5 connection mode at a time: bridge or MQL5 push.");
   }
 
+  const mode = runtimeMode(broker, mt5PushAllowlist);
   const service = await GreenBrainService.create({
     settingsPersistence: new JsonFileSettingsPersistence(settingsPath),
     ...(broker ? { broker } : {}),
@@ -96,26 +84,27 @@ async function main(): Promise<void> {
 
   const api = createApiServer(service, {
     port: PORT,
+    runtime: { brokerMode: mode, environment: "demo" },
     ...(API_TOKEN ? { apiToken: API_TOKEN } : {}),
     ...(DASHBOARD_ORIGIN ? { allowedOrigin: DASHBOARD_ORIGIN } : {}),
   });
   await api.listen();
-  // eslint-disable-next-line no-console
-  console.log(`GreenBrain API listening on http://127.0.0.1:${PORT}`);
+  console.log(`GreenBrain listening on http://127.0.0.1:${PORT}`);
+  console.log(`Runtime: ${runtimeLabel(mode)}`);
+  if (!API_TOKEN) console.log("Remote API authentication is OFF. Keep this service loopback-only.");
 
   if (mt5PushAllowlist) {
-    // eslint-disable-next-line no-console
-    console.log("MT5 push mode active: waiting for the Expert Advisor to call /api/mt5/evaluate. Internal tick loop disabled.");
+    console.log("Waiting for the MT5 Expert Advisor to push demo ticks. Internal paper tick loop is disabled.");
     return;
   }
 
+  if (!broker) console.log("MT5 is not configured; GreenBrain is running the paper engine only.");
   setInterval(() => {
     void service.tick(Date.now());
   }, TICK_INTERVAL_MS);
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error("GreenBrain service failed to start", error);
   process.exitCode = 1;
 });
