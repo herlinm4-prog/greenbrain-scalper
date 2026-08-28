@@ -1,15 +1,25 @@
 import type { StrategyTradeOutcome } from "./strategy-attribution.js";
 
+export interface TradePatternFingerprint {
+  key:string;
+  trend?:string;
+  volatilityBucket?:"low"|"normal"|"high";
+  rangeLocation?:"low"|"middle"|"high";
+  session?:string;
+  setup?:string;
+}
+
 export interface ExecutedExperienceInput {
   id:string; opportunityId:string; strategyId:string; symbol:string; regime:string;
   side:"buy"|"sell"; entryPrice:number; exitPrice:number; units:number;
   initialRiskAmount:number; spreadCost:number; commission:number; slippageCost:number;
   maximumFavorablePnl:number; maximumAdversePnl:number; openedAtMs:number; closedAtMs:number;
-  outOfSample:boolean;
+  outOfSample:boolean; pattern?:TradePatternFingerprint;
 }
 export interface RejectedExperienceInput {
   id:string; opportunityId:string; strategyId:string; symbol:string; regime:string;
   rejectedAtMs:number; reason:string; counterfactualReturnR?:number; outOfSample:boolean;
+  pattern?:TradePatternFingerprint;
 }
 export interface ExecutedExperience extends ExecutedExperienceInput {
   kind:"executed"; grossPnl:number; totalCosts:number; netPnl:number; netReturnR:number;
@@ -24,6 +34,11 @@ export interface StrategyEfficiencySummary {
   strategyId:string; executed:number; rejected:number; protectedCapitalEvents:number; missedOpportunities:number;
   netPnl:number; expectancyR:number; winRate:number; profitFactor:number; averageCostDragR:number;
   averageCaptureEfficiency:number;
+}
+
+export interface PatternEfficiencySummary {
+  patternKey:string; samples:number; wins:number; losses:number; breakeven:number;
+  netPnl:number; expectancyR:number; winRate:number; effective:boolean;
 }
 
 export class ExperienceLoop {
@@ -66,6 +81,23 @@ export class ExperienceLoop {
     const mean=(values:number[])=>values.length?values.reduce((a,b)=>a+b,0)/values.length:0;
     return {strategyId,executed:trades.length,rejected:rejected.length,protectedCapitalEvents:rejected.filter(x=>x.assessment==="protected-capital").length,missedOpportunities:rejected.filter(x=>x.assessment==="missed-opportunity").length,netPnl:trades.reduce((s,x)=>s+x.netPnl,0),expectancyR:mean(trades.map(x=>x.netReturnR)),winRate:trades.length?wins.length/trades.length:0,profitFactor:losses===0?(gains>0?Number.POSITIVE_INFINITY:0):gains/losses,averageCostDragR:mean(trades.map(x=>x.costDragR)),averageCaptureEfficiency:mean(trades.map(x=>x.captureEfficiency))};
   }
+
+  patternSummary(patternKey:string):PatternEfficiencySummary {
+    const trades=[...this.records.values()].filter((x):x is ExecutedExperience=>x.kind==="executed"&&x.pattern?.key===patternKey);
+    const wins=trades.filter(x=>x.netPnl>0).length;
+    const losses=trades.filter(x=>x.netPnl<0).length;
+    const breakeven=trades.length-wins-losses;
+    const netPnl=trades.reduce((sum,x)=>sum+x.netPnl,0);
+    const expectancyR=trades.length?trades.reduce((sum,x)=>sum+x.netReturnR,0)/trades.length:0;
+    const winRate=trades.length?wins/trades.length:0;
+    return {patternKey,samples:trades.length,wins,losses,breakeven,netPnl,expectancyR,winRate,effective:trades.length>=3&&expectancyR>0&&winRate>=0.5};
+  }
+
+  patterns():PatternEfficiencySummary[] {
+    const keys=[...new Set([...this.records.values()].filter((x):x is ExecutedExperience=>x.kind==="executed"&&Boolean(x.pattern?.key)).map(x=>x.pattern!.key))];
+    return keys.map(key=>this.patternSummary(key)).sort((a,b)=>b.expectancyR-a.expectancyR);
+  }
+
   all():OpportunityExperience[]{return structuredClone([...this.records.values()])}
   private assertUnique(id:string){if(this.records.has(id))throw new Error(`Experience already recorded: ${id}`)}
 }
