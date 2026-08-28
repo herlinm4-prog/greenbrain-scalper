@@ -88,12 +88,20 @@ async function route(
     }
 
     if (req.method === "GET" && url.pathname === "/api/state") {
+      const telemetry = service.getTelemetry();
       sendJson(res, 200, {
         settings: service.getSettings(),
-        telemetry: service.getTelemetry(),
+        telemetry,
+        outcomes: buildMoneyOutcomes(telemetry.history),
         assisted: service.getAssistedExecutionState(),
         runtime: runtime ?? { brokerMode: "paper", environment: "demo" },
       });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/outcomes") {
+      const telemetry = service.getTelemetry();
+      sendJson(res, 200, buildMoneyOutcomes(telemetry.history));
       return;
     }
 
@@ -156,7 +164,8 @@ async function route(
       const body = (await readJson(req)) as Parameters<GreenBrainService["reportClose"]>[0];
       try {
         service.reportClose(body);
-        sendJson(res, 200, { ok: true });
+        const telemetry = service.getTelemetry();
+        sendJson(res, 200, { ok: true, outcome: buildMoneyOutcomes(telemetry.history).latest });
       } catch (error) {
         sendJson(res, 400, { error: message(error) });
       }
@@ -194,6 +203,37 @@ async function route(
   }
 }
 
+function buildMoneyOutcomes(history: Array<{ timeIso: string; side: "BUY" | "SELL"; riskAmount: number; result: number }>) {
+  const trades = history.map((row) => {
+    const pnl = Number(row.result) || 0;
+    const riskAmount = Math.max(0, Number(row.riskAmount) || 0);
+    const outcome = pnl > 0 ? "MADE_MONEY" : pnl < 0 ? "LOST_MONEY" : "FLAT";
+    return {
+      ...row,
+      pnl,
+      netProfit: pnl,
+      profitable: pnl > 0,
+      outcome,
+      outcomeLabel: pnl > 0 ? "MADE MONEY" : pnl < 0 ? "LOST MONEY" : "NO PROFIT / LOSS",
+      rMultiple: riskAmount > 0 ? pnl / riskAmount : null,
+    };
+  });
+  const made = trades.filter((trade) => trade.pnl > 0).reduce((sum, trade) => sum + trade.pnl, 0);
+  const lost = Math.abs(trades.filter((trade) => trade.pnl < 0).reduce((sum, trade) => sum + trade.pnl, 0));
+  return {
+    latest: trades[0] ?? null,
+    trades,
+    summary: {
+      closedTrades: trades.length,
+      madeMoney: made,
+      lostMoney: lost,
+      netProfit: made - lost,
+      profitableTrades: trades.filter((trade) => trade.profitable).length,
+      losingTrades: trades.filter((trade) => trade.pnl < 0).length,
+    },
+  };
+}
+
 function hasValidBearerToken(req: IncomingMessage, token: string): boolean {
   const supplied = Buffer.from(req.headers.authorization ?? "", "utf-8");
   const expected = Buffer.from(`Bearer ${token}`, "utf-8");
@@ -202,7 +242,7 @@ function hasValidBearerToken(req: IncomingMessage, token: string): boolean {
 
 function dashboardAssetPath(pathname: string, dashboardDir: string): string | undefined {
   const relative = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  if (!["index.html", "app.js", "styles.css"].includes(relative)) return undefined;
+  if (!["index.html", "app.js", "styles.css", "effectiveness.js"].includes(relative)) return undefined;
   const filePath = resolve(dashboardDir, relative);
   return existsSync(filePath) ? filePath : undefined;
 }
